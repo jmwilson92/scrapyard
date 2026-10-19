@@ -1,0 +1,9 @@
+US ZIP code centroids in zip-centroids.csv are derived from the GeoNames
+postal code dataset (US.txt), https://download.geonames.org/export/zip/US.zip
+
+The GeoNames postal dump is licensed under Creative Commons Attribution 4.0
+(https://creativecommons.org/licenses/by/4.0/). Credit GeoNames
+(https://www.geonames.org/).
+
+One row is kept per 5-digit ZIP. When GeoNames lists more than one place for a
+ZIP, the row with the highest accuracy value is kept.

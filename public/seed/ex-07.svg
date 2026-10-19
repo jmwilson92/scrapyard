@@ -1,0 +1,8 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 800 600">
+  <rect width="800" height="600" fill="#efe7d8"/>
+  <rect x="48" y="48" width="704" height="504" rx="18" fill="#243f38"/>
+  <rect x="170" y="160" width="460" height="180" rx="4" fill="#7d848a" stroke="#1c1915" stroke-width="8"/>
+  <text x="80" y="470" fill="#f6f1e7" font-family="Arial, sans-serif" font-size="42" font-weight="700">A36</text>
+  <text x="80" y="515" fill="#e7b089" font-family="Arial, sans-serif" font-size="24">steel · plate · example</text>
+</svg>

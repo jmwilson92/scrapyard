@@ -1,0 +1,258 @@
+import {
+  isForm,
+  isMaterial,
+  isReportReason,
+  type Material,
+  type ReportReason,
+  type StockForm,
+} from "@/lib/constants";
+import type { ListingInput } from "@/lib/types";
+import { normalizeZip } from "@/lib/zip";
+
+export type FieldErrors = Record<string, string>;
+
+const EMAIL_PATTERN = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+
+export function parseListingForm(
+  raw: Record<string, FormDataEntryValue | string | undefined>,
+  zipExists: (zip: string) => boolean,
+): { ok: true; value: ListingInput } | { ok: false; errors: FieldErrors } {
+  const errors: FieldErrors = {};
+  const title = cleanText(text(raw.title), 80);
+  const alloy = cleanText(text(raw.alloy), 40);
+  const notes = text(raw.notes).trim().slice(0, 1000);
+  const material = text(raw.material).trim().toLowerCase();
+  const form = text(raw.form).trim().toLowerCase();
+  const zip = normalizeZip(text(raw.zip));
+
+  if (title.length < 3) errors.title = "Give the drop a short title.";
+  if (!isMaterial(material)) errors.material = "Choose a material.";
+  if (alloy.length < 1) errors.alloy = "Add an alloy or grade.";
+  if (!isForm(form)) errors.form = "Choose a form.";
+
+  const lengthIn = optionalInches(text(raw.lengthIn), "Length", errors, "lengthIn");
+  const widthIn = optionalInches(text(raw.widthIn), "Width", errors, "widthIn");
+  const thicknessIn = optionalInches(
+    text(raw.thicknessIn),
+    "Thickness",
+    errors,
+    "thicknessIn",
+  );
+  const diameterIn = optionalInches(
+    text(raw.diameterIn),
+    "Diameter",
+    errors,
+    "diameterIn",
+  );
+  if (
+    !errors.lengthIn &&
+    !errors.widthIn &&
+    !errors.thicknessIn &&
+    !errors.diameterIn &&
+    lengthIn == null &&
+    widthIn == null &&
+    thicknessIn == null &&
+    diameterIn == null
+  ) {
+    errors.lengthIn = "Add at least one dimension, in inches.";
+  }
+
+  const quantity = parseQuantity(text(raw.quantity), errors);
+  const weightLbs = optionalWeight(text(raw.weightLbs), errors);
+  const priceCents = parsePrice(text(raw.price), text(raw.isFree) === "on", errors);
+
+  if (zip.length !== 5) {
+    errors.zip = "Enter a 5-digit pickup ZIP code.";
+  } else if (!zipExists(zip)) {
+    errors.zip = "That ZIP isn't in the US centroid list.";
+  }
+
+  if (Object.keys(errors).length > 0 || !isMaterial(material) || !isForm(form)) {
+    return { ok: false, errors };
+  }
+
+  return {
+    ok: true,
+    value: {
+      title,
+      material: material as Material,
+      alloy,
+      form: form as StockForm,
+      lengthIn,
+      widthIn,
+      thicknessIn,
+      diameterIn,
+      quantity: quantity ?? 1,
+      weightLbs,
+      priceCents,
+      zip,
+      notes,
+    },
+  };
+}
+
+export function parseRegisterInput(
+  raw: Record<string, string>,
+  zipExists: (zip: string) => boolean,
+):
+  | { ok: true; value: { shopName: string; email: string; password: string; zip: string } }
+  | { ok: false; errors: FieldErrors } {
+  const errors: FieldErrors = {};
+  const shopName = cleanText(raw.shopName ?? "", 80);
+  const email = (raw.email ?? "").trim().toLowerCase();
+  const password = raw.password ?? "";
+  const zip = normalizeZip(raw.zip ?? "");
+
+  if (shopName.length < 2) errors.shopName = "Enter the shop name.";
+  if (!EMAIL_PATTERN.test(email) || email.length > 120) {
+    errors.email = "Enter a valid email address.";
+  }
+  if (password.length < 8) errors.password = "Use at least 8 characters.";
+  if (password.length > 72) errors.password = "Passwords stop at 72 characters.";
+  if (zip.length !== 5) errors.zip = "Enter a 5-digit shop ZIP code.";
+  else if (!zipExists(zip)) errors.zip = "That ZIP isn't in the US centroid list.";
+
+  if (Object.keys(errors).length > 0) return { ok: false, errors };
+  return { ok: true, value: { shopName, email, password, zip } };
+}
+
+export function parseLoginInput(raw: Record<string, string>):
+  | { ok: true; value: { email: string; password: string } }
+  | { ok: false; errors: FieldErrors } {
+  const errors: FieldErrors = {};
+  const email = (raw.email ?? "").trim().toLowerCase();
+  const password = raw.password ?? "";
+  if (!email || !password) {
+    errors.form = "Enter your email and password.";
+  }
+  if (Object.keys(errors).length > 0) return { ok: false, errors };
+  return { ok: true, value: { email, password } };
+}
+
+export function parseShopUpdate(
+  raw: Record<string, string>,
+  zipExists: (zip: string) => boolean,
+):
+  | { ok: true; value: { shopName: string; zip: string } }
+  | { ok: false; errors: FieldErrors } {
+  const errors: FieldErrors = {};
+  const shopName = cleanText(raw.shopName ?? "", 80);
+  const zip = normalizeZip(raw.zip ?? "");
+  if (shopName.length < 2) errors.shopName = "Enter the shop name.";
+  if (zip.length !== 5) errors.zip = "Enter a 5-digit shop ZIP code.";
+  else if (!zipExists(zip)) errors.zip = "That ZIP isn't in the US centroid list.";
+  if (Object.keys(errors).length > 0) return { ok: false, errors };
+  return { ok: true, value: { shopName, zip } };
+}
+
+export function parseMessageBody(
+  raw: string,
+): { ok: true; body: string } | { ok: false; error: string } {
+  const body = raw.trim();
+  if (body.length < 1) return { ok: false, error: "Write a message first." };
+  if (body.length > 2000) {
+    return { ok: false, error: "Keep the message under 2,000 characters." };
+  }
+  return { ok: true, body };
+}
+
+export function parseReport(
+  reasonRaw: string,
+  noteRaw: string,
+):
+  | { ok: true; reason: ReportReason; note: string }
+  | { ok: false; error: string } {
+  const reason = reasonRaw.trim();
+  const note = noteRaw.trim();
+  if (!isReportReason(reason)) return { ok: false, error: "Choose a reason." };
+  if (note.length > 500) {
+    return { ok: false, error: "Keep the note under 500 characters." };
+  }
+  return { ok: true, reason, note };
+}
+
+function text(value: FormDataEntryValue | string | undefined): string {
+  return typeof value === "string" ? value : "";
+}
+
+function cleanText(value: string, max: number): string {
+  return value.trim().replace(/\s+/g, " ").slice(0, max);
+}
+
+function optionalInches(
+  raw: string,
+  label: string,
+  errors: FieldErrors,
+  key: string,
+): number | null {
+  const trimmed = raw.trim();
+  if (!trimmed) return null;
+  const value = Number(trimmed);
+  if (!Number.isFinite(value)) {
+    errors[key] = `${label} must be a number of inches.`;
+    return null;
+  }
+  if (value < 0) {
+    errors[key] = `${label} can't be negative.`;
+    return null;
+  }
+  if (value === 0) return null;
+  if (value > 600) {
+    errors[key] = `${label} looks too large.`;
+    return null;
+  }
+  return value;
+}
+
+function parseQuantity(raw: string, errors: FieldErrors): number | null {
+  const trimmed = raw.trim();
+  if (!trimmed) {
+    errors.quantity = "Enter how many pieces are in the lot.";
+    return null;
+  }
+  if (!/^\d+$/.test(trimmed)) {
+    errors.quantity = "Quantity should be a whole number.";
+    return null;
+  }
+  const value = Number(trimmed);
+  if (value < 1 || value > 9999) {
+    errors.quantity = "Quantity has to be between 1 and 9,999.";
+    return null;
+  }
+  return value;
+}
+
+function optionalWeight(raw: string, errors: FieldErrors): number | null {
+  const trimmed = raw.trim();
+  if (!trimmed) return null;
+  const value = Number(trimmed);
+  if (!Number.isFinite(value) || value <= 0 || value > 20000) {
+    errors.weightLbs = "Weight should be a positive number of pounds.";
+    return null;
+  }
+  return Math.round(value * 10) / 10;
+}
+
+function parsePrice(
+  raw: string,
+  isFree: boolean,
+  errors: FieldErrors,
+): number | null {
+  if (isFree) return null;
+  const trimmed = raw.trim();
+  if (!trimmed) {
+    errors.price = "Enter a lot price, or mark it free.";
+    return null;
+  }
+  const value = Number(trimmed);
+  if (!Number.isFinite(value) || value < 0) {
+    errors.price = "Enter a price in dollars.";
+    return null;
+  }
+  if (value > 100000) {
+    errors.price = "Listings stay under $100,000.";
+    return null;
+  }
+  if (value === 0) return null;
+  return Math.round(value * 100);
+}

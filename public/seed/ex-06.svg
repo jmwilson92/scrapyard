@@ -1,0 +1,9 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 800 600">
+  <rect width="800" height="600" fill="#efe7d8"/>
+  <rect x="48" y="48" width="704" height="504" rx="18" fill="#243f38"/>
+  <circle cx="250" cy="230" r="90" fill="#7d848a" stroke="#1c1915" stroke-width="8"/>
+      <rect x="360" y="185" width="280" height="90" rx="45" fill="#7d848a" stroke="#1c1915" stroke-width="8"/>
+  <text x="80" y="470" fill="#f6f1e7" font-family="Arial, sans-serif" font-size="42" font-weight="700">1018</text>
+  <text x="80" y="515" fill="#e7b089" font-family="Arial, sans-serif" font-size="24">steel · round · example</text>
+</svg>
