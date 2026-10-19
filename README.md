@@ -25,6 +25,24 @@ npm run build
 
 Delete `data/dropyard.db` and restart to load the example listings again. Set `SEED_EXAMPLE_DATA=false` before the first boot if you want an empty board.
 
+## GitHub Codespaces
+
+The codespace only has the files that are on GitHub. Open the scrapyard repo and confirm you see `package.json`, `app/`, and this README. An empty repo, or one that only has GitHub’s starter README, needs this project pushed to `main` first.
+
+1. On the repo page, click **Code**, then the **Codespaces** tab, then **Create codespace on main**.
+2. When the editor finishes loading, open the terminal and run:
+
+   ```bash
+   npm install
+   npm run dev
+   ```
+
+3. Open the **Ports** tab. Port **3847** shows up once Next.js is ready. Click the globe on that row to open the app.
+
+No environment variables are required. Sign in as `kearny@demo.dropyard.example` with password `dropyard-demo`, or create your own shop.
+
+Stop the codespace from [github.com/codespaces](https://github.com/codespaces) when you are done. The free plan counts the hours it stays running.
+
 ## Example shops
 
 Every seeded shop uses the password `dropyard-demo`.
