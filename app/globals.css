@@ -51,25 +51,26 @@
 }
 
 :root {
-  --background: oklch(0.955 0.014 90);
-  --foreground: oklch(0.24 0.015 70);
-  --card: oklch(0.99 0.008 95);
-  --card-foreground: oklch(0.24 0.015 70);
-  --popover: oklch(0.99 0.008 95);
-  --popover-foreground: oklch(0.24 0.015 70);
-  --primary: oklch(0.34 0.04 175);
-  --primary-foreground: oklch(0.96 0.014 90);
-  --secondary: oklch(0.93 0.02 90);
-  --secondary-foreground: oklch(0.28 0.02 70);
-  --muted: oklch(0.92 0.018 90);
-  --muted-foreground: oklch(0.46 0.02 70);
-  --accent: oklch(0.9 0.03 70);
-  --accent-foreground: oklch(0.4 0.12 45);
-  --destructive: oklch(0.5 0.14 30);
-  --border: oklch(0.86 0.025 85);
-  --input: oklch(0.86 0.025 85);
-  --ring: oklch(0.62 0.14 45);
-  --copper: oklch(0.62 0.14 45);
+  --background: #ffffff;
+  --foreground: #1a1a1a;
+  --card: #ffffff;
+  --card-foreground: #1a1a1a;
+  --popover: #ffffff;
+  --popover-foreground: #1a1a1a;
+  --primary: #00a87e;
+  --primary-foreground: #ffffff;
+  --secondary: #f4f4f5;
+  --secondary-foreground: #1a1a1a;
+  --muted: #f5f5f5;
+  --muted-foreground: #6b7280;
+  --accent: #e7f7f2;
+  --accent-foreground: #067a5c;
+  --destructive: #dc2626;
+  --border: #e5e7eb;
+  --input: #e5e7eb;
+  --ring: #00a87e;
+  --copper: #00a87e;
+  --font-display: var(--font-sans), ui-sans-serif, system-ui, sans-serif;
   --chart-1: oklch(0.87 0 0);
   --chart-2: oklch(0.556 0 0);
   --chart-3: oklch(0.439 0 0);
@@ -125,9 +126,35 @@
     @apply border-border outline-ring/50;
   }
   body {
-    @apply bg-background text-foreground;
+    @apply bg-white text-foreground;
   }
   html {
     @apply font-sans;
   }
+}
+
+.dropyard-pin {
+  background: transparent;
+  border: none;
+}
+
+.dropyard-pin-dot {
+  display: block;
+  width: 18px;
+  height: 18px;
+  margin-left: 5px;
+  background: #00a87e;
+  border: 2px solid #fff;
+  border-radius: 999px 999px 999px 0;
+  transform: rotate(-45deg);
+  box-shadow: 0 2px 6px rgb(0 0 0 / 35%);
+}
+
+.dropyard-map.leaflet-container {
+  z-index: 0;
+  width: 100%;
+  height: min(70vh, 640px);
+  min-height: 420px;
+  font-family: inherit;
+  border-radius: 1rem;
 }

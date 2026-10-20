@@ -11,7 +11,7 @@ export default function RegisterPage() {
   return (
     <Shell>
       <div className="mx-auto max-w-lg">
-        <h1 className="font-display text-5xl tracking-wide">Create a shop account</h1>
+        <h1 className="text-3xl font-bold tracking-tight">Create a shop account</h1>
         <p className="mt-2 text-sm leading-6 text-muted-foreground">
           Email and a password. Nothing is mailed to you. Use the ZIP where
           buyers should start their search.

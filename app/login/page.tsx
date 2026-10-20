@@ -16,7 +16,7 @@ export default function LoginPage({ searchParams }: { searchParams: SearchParams
     <Shell>
       <div className="mx-auto grid max-w-3xl gap-6 lg:grid-cols-[1fr_0.9fr]">
         <div>
-          <h1 className="font-display text-5xl tracking-wide">Sign in</h1>
+          <h1 className="text-3xl font-bold tracking-tight">Sign in</h1>
           <p className="mt-2 text-sm leading-6 text-muted-foreground">
             No email is sent. Your password stays on this board.
           </p>
@@ -33,7 +33,7 @@ export default function LoginPage({ searchParams }: { searchParams: SearchParams
           </p>
         </div>
         <aside className="rounded-xl bg-secondary p-5">
-          <h2 className="font-display text-2xl tracking-wide">Example shops</h2>
+          <h2 className="text-xl font-bold">Example shops</h2>
           <p className="mt-2 text-sm leading-6">
             Every seeded shop uses the password{" "}
             <code className="font-semibold">{DEMO_PASSWORD}</code>. These

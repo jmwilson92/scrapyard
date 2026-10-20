@@ -1,8 +1,9 @@
-import type { Material, StockForm } from "@/lib/constants";
+import type { DeliveryMode, Material, MetalType, StockForm } from "@/lib/constants";
 
 export type ListingInput = {
   title: string;
   material: Material;
+  metalType: MetalType;
   alloy: string;
   form: StockForm;
   lengthIn: number | null;
@@ -14,12 +15,19 @@ export type ListingInput = {
   priceCents: number | null;
   zip: string;
   notes: string;
+  deliveryMode: DeliveryMode;
+  deliveryRadiusMiles: number | null;
+  deliveryFeeCents: number | null;
+  certsAvailable: boolean;
+  certsNote: string;
 };
 
 export type Listing = ListingInput & {
   id: string;
   sellerId: string;
   shopName: string;
+  shopZip: string;
+  sellerVerified: boolean;
   photoUrl: string | null;
   status: "active" | "sold";
   isExample: boolean;
@@ -34,6 +42,7 @@ export type UserRecord = {
   shopName: string;
   zip: string;
   isExample: boolean;
+  verifiedSeller: boolean;
   createdAt: number;
 };
 
@@ -43,6 +52,7 @@ export type PublicUser = {
   shopName: string;
   zip: string;
   isExample: boolean;
+  verifiedSeller: boolean;
 };
 
 export type MessageRow = {

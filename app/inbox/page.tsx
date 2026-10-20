@@ -14,7 +14,7 @@ export const metadata = { title: "Inbox" };
 export default function InboxPage() {
   return (
     <Shell>
-      <h1 className="font-display text-5xl tracking-wide">Inbox</h1>
+      <h1 className="text-3xl font-bold tracking-tight">Inbox</h1>
       <p className="mt-2 text-sm text-muted-foreground">
         Messages stay on DropYard. Nothing is emailed.
       </p>
