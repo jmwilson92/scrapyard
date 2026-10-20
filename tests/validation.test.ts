@@ -94,9 +94,9 @@ describe("messages and reports", () => {
 });
 
 describe("seed data", () => {
-  it("has about 15 example listings on real San Diego area ZIPs", () => {
-    expect(SEED_LISTINGS.length).toBe(15);
-    expect(new Set(SEED_LISTINGS.map((row) => row.material)).size).toBe(8);
+  it("has example listings on real San Diego area ZIPs", () => {
+    expect(SEED_LISTINGS.length).toBe(17);
+    expect(new Set(SEED_LISTINGS.map((row) => row.material)).size).toBe(9);
     for (const listing of SEED_LISTINGS) {
       expect(SEED_SHOPS.some((shop) => shop.id === listing.sellerId)).toBe(true);
       expect(lookupZip(listing.zip)?.state).toBe("CA");
@@ -104,6 +104,7 @@ describe("seed data", () => {
         {
           title: listing.title,
           material: listing.material,
+          metalType: listing.metalType,
           alloy: listing.alloy,
           form: listing.form,
           lengthIn: listing.lengthIn?.toString() ?? "",
@@ -116,11 +117,169 @@ describe("seed data", () => {
           isFree: listing.priceCents == null ? "on" : "",
           zip: listing.zip,
           notes: listing.notes,
+          deliveryMode: listing.deliveryMode,
+          deliveryRadius: listing.deliveryRadiusMiles?.toString() ?? "",
+          deliveryFee:
+            listing.deliveryFeeCents == null ? "" : String(listing.deliveryFeeCents / 100),
+          certsAvailable: listing.certsAvailable ? "on" : "",
+          certsNote: listing.certsNote,
         },
         zipExists,
       );
       expect(parsed.ok, listing.id).toBe(true);
+      if (!parsed.ok) continue;
+      expect(parsed.value.metalType).toBe(listing.metalType);
+      expect(parsed.value.form).toBe(listing.form);
+      expect(parsed.value.deliveryMode).toBe(listing.deliveryMode);
+      expect(parsed.value.deliveryRadiusMiles).toBe(listing.deliveryRadiusMiles);
+      expect(parsed.value.deliveryFeeCents).toBe(listing.deliveryFeeCents);
+      expect(parsed.value.certsAvailable).toBe(listing.certsAvailable);
+      expect(parsed.value.certsNote).toBe(listing.certsNote);
     }
+  });
+});
+
+describe("delivery and metal type", () => {
+  it("stores seller delivery with an optional radius and fee", () => {
+    const parsed = parseListingForm(
+      {
+        title: "316 tube drops",
+        metalType: "ss-316",
+        alloy: "316",
+        form: "tube-pipe",
+        diameterIn: "1.5",
+        thicknessIn: "0.065",
+        lengthIn: "48",
+        quantity: "3",
+        price: "70",
+        zip: "91950",
+        deliveryMode: "delivery",
+        deliveryRadius: "40",
+        deliveryFee: "50",
+      },
+      zipExists,
+    );
+    expect(parsed.ok).toBe(true);
+    if (!parsed.ok) return;
+    expect(parsed.value.material).toBe("stainless");
+    expect(parsed.value.metalType).toBe("ss-316");
+    expect(parsed.value.deliveryMode).toBe("delivery");
+    expect(parsed.value.deliveryRadiusMiles).toBe(40);
+    expect(parsed.value.deliveryFeeCents).toBe(5000);
+  });
+
+  it("ignores delivery details when the lot is pickup only", () => {
+    const parsed = parseListingForm(
+      {
+        title: "6061 drops",
+        metalType: "al-6061",
+        alloy: "6061-T6",
+        form: "round",
+        diameterIn: "1.5",
+        lengthIn: "24",
+        quantity: "6",
+        price: "36",
+        zip: "92111",
+        deliveryMode: "pickup",
+        deliveryRadius: "10",
+        deliveryFee: "15",
+      },
+      zipExists,
+    );
+    expect(parsed.ok).toBe(true);
+    if (!parsed.ok) return;
+    expect(parsed.value.form).toBe("bar-round");
+    expect(parsed.value.deliveryMode).toBe("pickup");
+    expect(parsed.value.deliveryRadiusMiles).toBeNull();
+    expect(parsed.value.deliveryFeeCents).toBeNull();
+  });
+
+  it("keeps a cert note only when certs are offered", () => {
+    const offered = parseListingForm(
+      {
+        title: "304 sheet",
+        metalType: "ss-304",
+        alloy: "304",
+        form: "plate-sheet",
+        thicknessIn: "0.06",
+        widthIn: "24",
+        lengthIn: "36",
+        quantity: "1",
+        price: "48",
+        zip: "91910",
+        certsAvailable: "on",
+        certsNote: "Certificate of conformance from the service center.",
+      },
+      zipExists,
+    );
+    expect(offered.ok).toBe(true);
+    if (!offered.ok) return;
+    expect(offered.value.certsAvailable).toBe(true);
+    expect(offered.value.certsNote).toContain("conformance");
+
+    const hidden = parseListingForm(
+      {
+        title: "304 sheet",
+        metalType: "ss-304",
+        alloy: "304",
+        form: "plate-sheet",
+        thicknessIn: "0.06",
+        widthIn: "24",
+        lengthIn: "36",
+        quantity: "1",
+        price: "48",
+        zip: "91910",
+        certsNote: "Should be ignored",
+      },
+      zipExists,
+    );
+    expect(hidden.ok).toBe(true);
+    if (!hidden.ok) return;
+    expect(hidden.value.certsAvailable).toBe(false);
+    expect(hidden.value.certsNote).toBe("");
+
+    const long = parseListingForm(
+      {
+        title: "304 sheet",
+        metalType: "ss-304",
+        alloy: "304",
+        form: "plate-sheet",
+        thicknessIn: "0.06",
+        widthIn: "24",
+        lengthIn: "36",
+        quantity: "1",
+        price: "48",
+        zip: "91910",
+        certsAvailable: "on",
+        certsNote: "x".repeat(301),
+      },
+      zipExists,
+    );
+    expect(long.ok).toBe(false);
+    if (long.ok) return;
+    expect(long.errors.certsNote).toBeTruthy();
+  });
+
+  it("rejects a delivery radius outside 1 to 500 miles", () => {
+    const parsed = parseListingForm(
+      {
+        title: "Bronze rounds",
+        metalType: "bronze",
+        alloy: "932",
+        form: "bar-round",
+        diameterIn: "1",
+        lengthIn: "8",
+        quantity: "1",
+        price: "40",
+        zip: "91950",
+        deliveryMode: "delivery",
+        deliveryRadius: "900",
+      },
+      zipExists,
+    );
+    expect(parsed.ok).toBe(false);
+    if (parsed.ok) return;
+    expect(parsed.errors.deliveryRadius).toBeTruthy();
   });
 });
 

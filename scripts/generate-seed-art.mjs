@@ -9,6 +9,7 @@ const colors = {
   brass: "#d4b15a",
   copper: "#c56a45",
   plastic: "#b7c7a4",
+  bronze: "#b08d57",
   other: "#c2b2a1",
 };
 
@@ -25,9 +26,11 @@ const items = [
   ["ex-10", "copper", "round", "110 copper"],
   ["ex-11", "plastic", "round", "Acetal"],
   ["ex-12", "steel", "tube", "4130"],
-  ["ex-13", "aluminum", "sheet", "2024-T3"],
+  ["ex-13", "aluminum", "sheet", "5052-H32"],
   ["ex-14", "aluminum", "bar", "6061-T6"],
   ["ex-15", "other", "round", "Invar 36"],
+  ["ex-16", "steel", "angle", "A36 angle"],
+  ["ex-17", "bronze", "round", "932 bronze"],
 ];
 
 const out = path.join(process.cwd(), "public", "seed");
@@ -69,6 +72,9 @@ function shape(form, fill) {
   }
   if (form === "bar") {
     return `<rect x="160" y="200" width="480" height="70" fill="${fill}" stroke="#1c1915" stroke-width="8"/>`;
+  }
+  if (form === "angle") {
+    return `<polygon points="180,160 250,160 250,340 560,340 560,410 180,410" fill="${fill}" stroke="#1c1915" stroke-width="8"/>`;
   }
   return `<rect x="170" y="160" width="460" height="180" rx="4" fill="${fill}" stroke="#1c1915" stroke-width="8"/>`;
 }

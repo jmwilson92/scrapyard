@@ -1,6 +1,7 @@
 import Link from "next/link";
 import { Suspense } from "react";
 import { logoutAction } from "@/app/actions/auth";
+import { TopSearch } from "@/components/top-search";
 import { countUnread } from "@/lib/repo";
 import { getRequestDb, isDatabaseConfigError } from "@/lib/server-db";
 import { getCurrentUser } from "@/lib/session";
@@ -8,23 +9,40 @@ import type { PublicUser } from "@/lib/types";
 
 export function SiteHeader() {
   return (
-    <header className="bg-primary text-primary-foreground">
-      <div className="mx-auto flex w-full max-w-6xl flex-wrap items-center justify-between gap-x-4 gap-y-2 px-4 py-3 sm:px-6">
+    <header className="sticky top-0 z-50 border-b border-neutral-200 bg-white">
+      <div className="mx-auto flex w-full max-w-7xl flex-wrap items-center gap-3 px-4 py-3 sm:px-6">
         <Link
           href="/"
-          className="font-display text-3xl leading-none tracking-wide focus-visible:outline-2 focus-visible:outline-offset-4 focus-visible:outline-copper"
+          className="text-xl font-extrabold tracking-tight text-neutral-950 focus-visible:outline-2 focus-visible:outline-offset-4 focus-visible:outline-ring"
         >
-          DROP<span className="text-copper">YARD</span>
+          Drop<span className="text-primary">Yard</span>
         </Link>
-        <nav className="flex flex-wrap items-center gap-x-4 gap-y-2 text-sm font-semibold">
+        <div className="order-3 w-full min-w-0 flex-1 lg:order-none">
+          <Suspense fallback={<div className="h-12 rounded-full border-2 border-neutral-200" />}>
+            <HeaderSearch />
+          </Suspense>
+        </div>
+        <nav className="ml-auto flex flex-wrap items-center gap-x-3 gap-y-2 text-sm font-semibold">
           <HeaderLink href="/browse">Browse</HeaderLink>
-          <Suspense fallback={<span className="opacity-70">Account</span>}>
+          <HeaderLink href="/map">Map</HeaderLink>
+          <Suspense fallback={<span className="text-neutral-400">Account</span>}>
             <AccountLinks />
           </Suspense>
         </nav>
       </div>
     </header>
   );
+}
+
+async function HeaderSearch() {
+  let zip = "";
+  try {
+    const user = await getCurrentUser();
+    zip = user?.zip ?? "";
+  } catch (error) {
+    if (!isDatabaseConfigError(error)) throw error;
+  }
+  return <TopSearch defaultZip={zip} />;
 }
 
 async function AccountLinks() {
@@ -64,20 +82,29 @@ function AccountNav({
   if (!user) {
     return (
       <>
-        <HeaderLink href="/login?next=/listings/new">List a drop</HeaderLink>
+        <Link
+          href="/login?next=/listings/new"
+          className="rounded-full bg-primary px-3 py-1.5 text-white hover:bg-primary/90"
+        >
+          Sell
+        </Link>
         <HeaderLink href="/login">Sign in</HeaderLink>
-        <HeaderLink href="/register">Create account</HeaderLink>
       </>
     );
   }
 
   return (
     <>
-      <HeaderLink href="/listings/new">List a drop</HeaderLink>
+      <Link
+        href="/listings/new"
+        className="rounded-full bg-primary px-3 py-1.5 text-white hover:bg-primary/90"
+      >
+        Sell
+      </Link>
       <HeaderLink href="/inbox">
         Inbox
         {unread > 0 ? (
-          <span className="ml-1 inline-flex min-w-5 items-center justify-center rounded-full bg-copper px-1.5 text-xs text-white">
+          <span className="ml-1 inline-flex min-w-5 items-center justify-center rounded-full bg-primary px-1.5 text-xs text-white">
             {unread > 9 ? "9+" : unread}
           </span>
         ) : null}
@@ -86,7 +113,7 @@ function AccountNav({
       <form action={logoutAction}>
         <button
           type="submit"
-          className="rounded-md px-1 py-1 text-primary-foreground/80 hover:text-primary-foreground focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-copper"
+          className="rounded-md px-1 py-1 text-neutral-500 hover:text-neutral-900 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring"
         >
           Sign out
         </button>
@@ -105,7 +132,7 @@ function HeaderLink({
   return (
     <Link
       href={href}
-      className="inline-flex items-center rounded-md px-1 py-1 text-primary-foreground/85 hover:text-primary-foreground focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-copper"
+      className="inline-flex items-center rounded-md px-1 py-1 text-neutral-700 hover:text-neutral-950 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring"
     >
       {children}
     </Link>

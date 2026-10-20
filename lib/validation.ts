@@ -1,10 +1,14 @@
 import {
-  isForm,
+  canonicalForm,
+  inferMetalType,
   isMaterial,
+  isMetalType,
   isReportReason,
+  materialForMetalType,
+  type DeliveryMode,
   type Material,
+  type MetalType,
   type ReportReason,
-  type StockForm,
 } from "@/lib/constants";
 import type { ListingInput } from "@/lib/types";
 import { normalizeZip } from "@/lib/zip";
@@ -21,14 +25,15 @@ export function parseListingForm(
   const title = cleanText(text(raw.title), 80);
   const alloy = cleanText(text(raw.alloy), 40);
   const notes = text(raw.notes).trim().slice(0, 1000);
-  const material = text(raw.material).trim().toLowerCase();
-  const form = text(raw.form).trim().toLowerCase();
+  const materialRaw = text(raw.material).trim().toLowerCase();
+  const metalRaw = text(raw.metalType).trim().toLowerCase();
+  const form = canonicalForm(text(raw.form));
   const zip = normalizeZip(text(raw.zip));
+  const metal = resolveMetal(metalRaw, materialRaw, alloy, errors);
 
   if (title.length < 3) errors.title = "Give the drop a short title.";
-  if (!isMaterial(material)) errors.material = "Choose a material.";
   if (alloy.length < 1) errors.alloy = "Add an alloy or grade.";
-  if (!isForm(form)) errors.form = "Choose a form.";
+  if (!form) errors.form = "Choose a form.";
 
   const lengthIn = optionalInches(text(raw.lengthIn), "Length", errors, "lengthIn");
   const widthIn = optionalInches(text(raw.widthIn), "Width", errors, "widthIn");
@@ -60,6 +65,8 @@ export function parseListingForm(
   const quantity = parseQuantity(text(raw.quantity), errors);
   const weightLbs = optionalWeight(text(raw.weightLbs), errors);
   const priceCents = parsePrice(text(raw.price), text(raw.isFree) === "on", errors);
+  const delivery = parseDelivery(raw, errors);
+  const certs = parseCerts(raw, errors);
 
   if (zip.length !== 5) {
     errors.zip = "Enter a 5-digit pickup ZIP code.";
@@ -67,7 +74,7 @@ export function parseListingForm(
     errors.zip = "That ZIP isn't in the US centroid list.";
   }
 
-  if (Object.keys(errors).length > 0 || !isMaterial(material) || !isForm(form)) {
+  if (Object.keys(errors).length > 0 || !metal || !form) {
     return { ok: false, errors };
   }
 
@@ -75,9 +82,10 @@ export function parseListingForm(
     ok: true,
     value: {
       title,
-      material: material as Material,
+      material: metal.material,
+      metalType: metal.metalType,
       alloy,
-      form: form as StockForm,
+      form,
       lengthIn,
       widthIn,
       thicknessIn,
@@ -87,8 +95,83 @@ export function parseListingForm(
       priceCents,
       zip,
       notes,
+      deliveryMode: delivery.mode,
+      deliveryRadiusMiles: delivery.radius,
+      deliveryFeeCents: delivery.fee,
+      certsAvailable: certs.available,
+      certsNote: certs.note,
     },
   };
+}
+
+function parseCerts(
+  raw: Record<string, FormDataEntryValue | string | undefined>,
+  errors: FieldErrors,
+): { available: boolean; note: string } {
+  const available = text(raw.certsAvailable) === "on" || text(raw.certsAvailable) === "1";
+  const note = text(raw.certsNote).trim();
+  if (!available) return { available: false, note: "" };
+  if (note.length > 300) {
+    errors.certsNote = "Keep the cert note under 300 characters.";
+    return { available: true, note: "" };
+  }
+  return { available: true, note };
+}
+
+function resolveMetal(
+  metalRaw: string,
+  materialRaw: string,
+  alloy: string,
+  errors: FieldErrors,
+): { metalType: MetalType; material: Material } | null {
+  if (isMetalType(metalRaw)) {
+    return { metalType: metalRaw, material: materialForMetalType(metalRaw) };
+  }
+  if (metalRaw) {
+    errors.metalType = "Choose a metal type.";
+    return null;
+  }
+  if (isMaterial(materialRaw)) {
+    return {
+      metalType: inferMetalType(materialRaw, alloy),
+      material: materialRaw,
+    };
+  }
+  errors.material = "Choose a material.";
+  errors.metalType = "Choose a metal type.";
+  return null;
+}
+
+function parseDelivery(
+  raw: Record<string, FormDataEntryValue | string | undefined>,
+  errors: FieldErrors,
+): { mode: DeliveryMode; radius: number | null; fee: number | null } {
+  const mode: DeliveryMode = text(raw.deliveryMode) === "delivery" ? "delivery" : "pickup";
+  if (mode === "pickup") return { mode, radius: null, fee: null };
+
+  const radiusRaw = text(raw.deliveryRadius).trim();
+  let radius: number | null = null;
+  if (radiusRaw) {
+    const value = Number(radiusRaw);
+    if (!Number.isFinite(value) || value < 1 || value > 500) {
+      errors.deliveryRadius = "Delivery radius should be between 1 and 500 miles.";
+    } else {
+      radius = Math.round(value);
+    }
+  }
+
+  const feeRaw = text(raw.deliveryFee).trim();
+  let fee: number | null = null;
+  if (feeRaw) {
+    const value = Number(feeRaw);
+    if (!Number.isFinite(value) || value < 0 || value > 10000) {
+      errors.deliveryFee = "Delivery fee should be a dollar amount under $10,000.";
+    } else {
+      fee = Math.round(value * 100);
+    }
+  }
+
+  return { mode, radius, fee };
 }
 
 export function parseRegisterInput(

@@ -12,7 +12,7 @@ export default function ErrorPage({
 }) {
   return (
     <Shell>
-      <h1 className="font-display text-5xl tracking-wide">The board hit a snag</h1>
+      <h1 className="text-3xl font-bold tracking-tight">The board hit a snag</h1>
       <p className="mt-3 max-w-lg text-base leading-7 text-muted-foreground">
         {error.message || "Try loading this page again."}
       </p>

@@ -4,6 +4,7 @@ import { deleteListingAction, setListingStatusAction } from "@/app/actions/listi
 import { ShopForm } from "@/components/auth-forms";
 import { DatabaseSetup } from "@/components/database-setup";
 import { Shell } from "@/components/shell";
+import { VerifiedSellerBadge, VerifiedSellerPlaceholder } from "@/components/verified-seller";
 import { Button } from "@/components/ui/button";
 import { formatMoney } from "@/lib/format";
 import { listListingsBySeller } from "@/lib/repo";
@@ -41,8 +42,17 @@ async function AccountBody({ searchParams }: { searchParams: SearchParams }) {
   return (
     <div className="grid gap-8">
       <div>
-        <h1 className="font-display text-5xl tracking-wide">{user.shopName}</h1>
+        <h1 className="text-3xl font-bold tracking-tight">{user.shopName}</h1>
+        <p className="mt-1 text-sm">
+          <Link href={`/shops/${user.id}`} className="font-semibold text-primary">
+            View public shop
+          </Link>
+        </p>
         <p className="mt-2 text-sm text-muted-foreground">{user.email}</p>
+        <div className="mt-3 flex flex-wrap items-center gap-3">
+          {user.verifiedSeller ? <VerifiedSellerBadge /> : null}
+          <VerifiedSellerPlaceholder />
+        </div>
         {user.isExample ? (
           <p className="mt-3 max-w-2xl rounded-lg bg-secondary px-3 py-2 text-sm leading-6">
             You&apos;re signed in as a seeded example shop. Listings you change
@@ -57,7 +67,7 @@ async function AccountBody({ searchParams }: { searchParams: SearchParams }) {
       </div>
 
       <section className="rounded-xl bg-card p-4 ring-1 ring-foreground/10 sm:p-6">
-        <h2 className="font-display text-3xl tracking-wide">Shop details</h2>
+        <h2 className="text-xl font-bold">Shop details</h2>
         <div className="mt-4">
           <ShopForm shopName={user.shopName} zip={user.zip} />
         </div>
@@ -65,7 +75,7 @@ async function AccountBody({ searchParams }: { searchParams: SearchParams }) {
 
       <section>
         <div className="mb-4 flex items-center justify-between gap-3">
-          <h2 className="font-display text-3xl tracking-wide">Your listings</h2>
+          <h2 className="text-xl font-bold">Your listings</h2>
           <Button nativeButton={false} render={<Link href="/listings/new" />} className="h-11 px-4">
             List a drop
           </Button>

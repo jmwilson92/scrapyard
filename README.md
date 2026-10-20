@@ -1,6 +1,6 @@
 # DropYard
 
-DropYard is a free remnant-metal board for machine shops. A shop lists leftover bar, plate, tube, sheet, round, or block. Nearby shops search by material, alloy, form, price, and distance from a ZIP code, then message the seller in the app and pick the metal up. Nothing is charged on the site.
+DropYard is a free remnant-metal board for machine shops. A shop lists leftover plate, bar, tube, angle, or mixed scrap. Nearby shops search by metal type (6061, 7075, 5052, mild steel, 304, 316, copper, brass, bronze, titanium, and others), form, thickness, length, price, distance from a ZIP code, and whether the seller can deliver. They message the seller in the app. A map shows each shop as a pin. Nothing is charged on the site. A delivery fee or a material-cert note is information for the buyer. Sellers choose buyer pickup or that they can deliver. A future $1 Verified Seller badge is shown from a shop flag and is not for sale yet. Posting and browsing stay free.
 
 Example listings around San Diego are seeded so the board is usable on first run. They are marked **Example** and are not live inventory.
 
@@ -102,7 +102,7 @@ The app is a Next.js App Router project and stays on the Node.js runtime. The Ho
 5. Optional: set `SEED_EXAMPLE_DATA=false` if the production board should start empty. If you leave it unset, the first request seeds the example San Diego listings into the empty Turso database.
 6. Deploy. `npm run build` is the build command and Next.js is the framework preset.
 
-Distance search does not call a geocoding API. Centroids for US ZIP codes ship in `data/zip-centroids.csv`.
+Distance search does not call a geocoding API. Centroids for US ZIP codes ship in `data/zip-centroids.csv`. The map uses Leaflet with OpenStreetMap tiles and does not need an API key. Shop pins sit on the shop ZIP. A pin opens the shop name and active listing count, and links to that shop's page.
 
 ## Auth and messages
 

@@ -1,15 +1,9 @@
 import Link from "next/link";
-import { Badge } from "@/components/ui/badge";
 import { ListingPhoto } from "@/components/listing-photo";
-import { formLabel, materialLabel } from "@/lib/constants";
-import {
-  formatDimensions,
-  formatDistance,
-  formatMoney,
-  formatQuantity,
-  formatWeight,
-} from "@/lib/format";
+import { VerifiedSellerBadge } from "@/components/verified-seller";
+import { formatDelivery, formatDistance, formatMoney } from "@/lib/format";
 import type { Listing } from "@/lib/types";
+import { lookupZip } from "@/lib/zip";
 
 export function ListingCard({
   listing,
@@ -24,58 +18,59 @@ export function ListingCard({
     ? `/listings/${listing.id}?from=${fromZip}`
     : `/listings/${listing.id}`;
   const distance = formatDistance(distanceMiles);
-  const weight = formatWeight(listing.weightLbs);
-  const dimensions = formatDimensions(listing);
+  const place = lookupZip(listing.zip);
+  const where = place ? `${place.city}, ${place.state}` : listing.zip;
+  const delivers = listing.deliveryMode === "delivery";
 
   return (
-    <Link
-      href={href}
-      className="group flex flex-col overflow-hidden rounded-xl bg-card ring-1 ring-foreground/10 transition-colors hover:ring-copper focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring"
-    >
+    <Link href={href} className="group block focus-visible:outline-2 focus-visible:outline-offset-4 focus-visible:outline-ring">
       <div className="relative">
-        <ListingPhoto src={listing.photoUrl} alt="" />
+        <ListingPhoto src={listing.photoUrl} alt="" className="rounded-2xl" />
         <div className="absolute top-2 left-2 flex flex-wrap gap-1">
-          {listing.isExample ? <Badge variant="secondary">Example</Badge> : null}
+          {listing.isExample ? (
+            <span className="rounded-full bg-white/95 px-2 py-0.5 text-xs font-semibold text-neutral-800">
+              Example
+            </span>
+          ) : null}
           {listing.status === "sold" ? (
-            <Badge variant="destructive">Sold</Badge>
+            <span className="rounded-full bg-neutral-900/90 px-2 py-0.5 text-xs font-semibold text-white">
+              Sold
+            </span>
+          ) : null}
+          {listing.certsAvailable ? (
+            <span className="rounded-full bg-neutral-900 px-2 py-0.5 text-xs font-semibold text-white">
+              Certs
+            </span>
           ) : null}
         </div>
+        <span
+          className={
+            delivers
+              ? "absolute bottom-2 left-2 rounded-full bg-primary px-2 py-0.5 text-xs font-semibold text-white"
+              : "absolute bottom-2 left-2 rounded-full bg-white/95 px-2 py-0.5 text-xs font-semibold text-neutral-800"
+          }
+        >
+          {delivers ? "Delivers" : "Pickup only"}
+        </span>
       </div>
-      <div className="flex flex-1 flex-col gap-2 p-4">
-        <p className="text-xs font-medium tracking-wide text-muted-foreground uppercase">
-          {materialLabel(listing.material)} · {formLabel(listing.form)}
-        </p>
-        <h2 className="font-display text-2xl leading-none tracking-wide group-hover:text-copper">
-          {listing.alloy}
-        </h2>
-        <p className="text-sm leading-6">{listing.title}</p>
-        <p className="text-sm text-muted-foreground">
-          {dimensions || "Dimensions not listed"}
-        </p>
-        <p className="text-sm text-muted-foreground">
-          {formatQuantity(listing.quantity)}
-          {weight ? ` · ${weight}` : ""} · {listing.shopName}
-        </p>
-        <div className="mt-auto flex items-end justify-between gap-3 pt-2">
-          <p className="text-sm text-muted-foreground">
-            {listing.zip}
-            {distance ? ` · ${distance}` : ""}
-          </p>
-          <p
-            className={
-              listing.priceCents == null
-                ? "font-display text-3xl tracking-wide text-primary"
-                : "font-display text-3xl tracking-wide text-copper"
-            }
-          >
-            {formatMoney(listing.priceCents)}
-            {listing.priceCents != null ? (
-              <span className="ml-1 font-sans text-xs font-medium tracking-normal text-muted-foreground">
-                lot
-              </span>
-            ) : null}
-          </p>
+      <div className="px-0.5 pt-2">
+        <div className="flex items-baseline justify-between gap-2">
+          <p className="text-lg font-bold tracking-tight">{formatMoney(listing.priceCents)}</p>
+          {distance ? <p className="text-sm text-neutral-500">{distance}</p> : null}
         </div>
+        <h2 className="mt-0.5 line-clamp-2 text-sm leading-5 text-neutral-800 group-hover:underline">
+          {listing.title}
+        </h2>
+        <p className="mt-0.5 text-xs text-neutral-500">
+          {where}
+          {listing.priceCents != null ? " · lot" : ""}
+        </p>
+        {listing.sellerVerified ? (
+          <p className="mt-1">
+            <VerifiedSellerBadge />
+          </p>
+        ) : null}
+        <p className="sr-only">{formatDelivery(listing)}</p>
       </div>
     </Link>
   );

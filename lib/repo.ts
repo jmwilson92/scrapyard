@@ -1,12 +1,16 @@
 import type { Client } from "@libsql/client";
+import { canonicalForm, isDeliveryMode, isMetalType } from "@/lib/constants";
 import type { Listing, ListingInput, MessageRow, PublicUser, UserRecord } from "@/lib/types";
 
 const LISTING_SELECT = `
   SELECT
-    l.id, l.seller_id, u.shop_name, l.title, l.material, l.alloy, l.form,
+    l.id, l.seller_id, u.shop_name, u.zip AS shop_zip, l.title, l.material,
+    l.metal_type, l.alloy, l.form,
     l.length_in, l.width_in, l.thickness_in, l.diameter_in,
     l.quantity, l.weight_lbs, l.price_cents, l.zip, l.notes, l.photo_url,
-    l.status, l.is_example, l.created_at, l.updated_at
+    l.status, l.is_example, l.delivery_mode, l.delivery_radius_miles,
+    l.delivery_fee_cents, l.certs_available, l.certs_note, u.verified_seller,
+    l.created_at, l.updated_at
   FROM listings l
   JOIN users u ON u.id = l.seller_id
 `;
@@ -20,13 +24,14 @@ export async function insertUser(
     shopName: string;
     zip: string;
     isExample?: boolean;
+    verifiedSeller?: boolean;
     createdAt?: number;
   },
 ): Promise<void> {
   await db.execute({
     sql: `INSERT INTO users
-      (id, email, password_hash, shop_name, zip, is_example, created_at)
-      VALUES (?, ?, ?, ?, ?, ?, ?)`,
+      (id, email, password_hash, shop_name, zip, is_example, verified_seller, created_at)
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
     args: [
       user.id,
       user.email,
@@ -34,6 +39,7 @@ export async function insertUser(
       user.shopName,
       user.zip,
       user.isExample ? 1 : 0,
+      user.verifiedSeller ? 1 : 0,
       user.createdAt ?? Date.now(),
     ],
   });
@@ -44,7 +50,7 @@ export async function findUserByEmail(
   email: string,
 ): Promise<UserRecord | null> {
   const result = await db.execute({
-    sql: `SELECT id, email, password_hash, shop_name, zip, is_example, created_at
+    sql: `SELECT id, email, password_hash, shop_name, zip, is_example, verified_seller, created_at
       FROM users WHERE email = ?`,
     args: [email],
   });
@@ -57,6 +63,7 @@ export async function findUserByEmail(
     shopName: text(row.shop_name),
     zip: text(row.zip),
     isExample: flag(row.is_example),
+    verifiedSeller: flag(row.verified_seller),
     createdAt: num(row.created_at),
   };
 }
@@ -79,7 +86,7 @@ export async function findUserBySession(
   now = Date.now(),
 ): Promise<PublicUser | null> {
   const result = await db.execute({
-    sql: `SELECT u.id, u.email, u.shop_name, u.zip, u.is_example
+    sql: `SELECT u.id, u.email, u.shop_name, u.zip, u.is_example, u.verified_seller
       FROM sessions s
       JOIN users u ON u.id = s.user_id
       WHERE s.token_hash = ? AND s.expires_at > ?`,
@@ -93,6 +100,27 @@ export async function findUserBySession(
     shopName: text(row.shop_name),
     zip: text(row.zip),
     isExample: flag(row.is_example),
+    verifiedSeller: flag(row.verified_seller),
+  };
+}
+
+export async function findPublicUserById(
+  db: Client,
+  id: string,
+): Promise<PublicUser | null> {
+  const result = await db.execute({
+    sql: `SELECT id, email, shop_name, zip, is_example, verified_seller FROM users WHERE id = ?`,
+    args: [id],
+  });
+  const row = result.rows[0];
+  if (!row) return null;
+  return {
+    id: text(row.id),
+    email: text(row.email),
+    shopName: text(row.shop_name),
+    zip: text(row.zip),
+    isExample: flag(row.is_example),
+    verifiedSeller: flag(row.verified_seller),
   };
 }
 
@@ -127,16 +155,18 @@ export async function insertListing(
   const createdAt = listing.createdAt ?? Date.now();
   await db.execute({
     sql: `INSERT INTO listings (
-      id, seller_id, title, material, alloy, form,
+      id, seller_id, title, material, metal_type, alloy, form,
       length_in, width_in, thickness_in, diameter_in,
       quantity, weight_lbs, price_cents, zip, notes, photo_url,
-      status, is_example, created_at, updated_at
-    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'active', ?, ?, ?)`,
+      status, is_example, delivery_mode, delivery_radius_miles, delivery_fee_cents,
+      certs_available, certs_note, created_at, updated_at
+    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'active', ?, ?, ?, ?, ?, ?, ?, ?)`,
     args: [
       listing.id,
       listing.sellerId,
       listing.title,
       listing.material,
+      listing.metalType,
       listing.alloy,
       listing.form,
       listing.lengthIn,
@@ -150,6 +180,11 @@ export async function insertListing(
       listing.notes,
       listing.photoUrl,
       listing.isExample ? 1 : 0,
+      listing.deliveryMode,
+      listing.deliveryRadiusMiles,
+      listing.deliveryFeeCents,
+      listing.certsAvailable ? 1 : 0,
+      listing.certsNote,
       createdAt,
       createdAt,
     ],
@@ -352,14 +387,18 @@ export async function insertReport(
 
 function mapListing(row: Record<string, unknown>): Listing {
   const status = text(row.status) === "sold" ? "sold" : "active";
+  const metalRaw = text(row.metal_type);
+  const deliveryRaw = text(row.delivery_mode);
   return {
     id: text(row.id),
     sellerId: text(row.seller_id),
     shopName: text(row.shop_name),
+    shopZip: text(row.shop_zip || row.zip),
     title: text(row.title),
     material: text(row.material) as Listing["material"],
+    metalType: isMetalType(metalRaw) ? metalRaw : "other",
     alloy: text(row.alloy),
-    form: text(row.form) as Listing["form"],
+    form: canonicalForm(text(row.form)) ?? "bar-round",
     lengthIn: optionalNum(row.length_in),
     widthIn: optionalNum(row.width_in),
     thicknessIn: optionalNum(row.thickness_in),
@@ -372,6 +411,12 @@ function mapListing(row: Record<string, unknown>): Listing {
     photoUrl: row.photo_url == null ? null : text(row.photo_url),
     status,
     isExample: flag(row.is_example),
+    sellerVerified: flag(row.verified_seller),
+    deliveryMode: isDeliveryMode(deliveryRaw) ? deliveryRaw : "pickup",
+    deliveryRadiusMiles: optionalNum(row.delivery_radius_miles),
+    deliveryFeeCents: optionalNum(row.delivery_fee_cents),
+    certsAvailable: flag(row.certs_available),
+    certsNote: text(row.certs_note),
     createdAt: num(row.created_at),
     updatedAt: num(row.updated_at),
   };

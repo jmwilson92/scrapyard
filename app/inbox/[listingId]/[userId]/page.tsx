@@ -52,7 +52,7 @@ async function Thread({ params }: { params: Params }) {
         <Link href="/inbox" className="text-sm font-semibold text-copper">
           Back to inbox
         </Link>
-        <h1 className="mt-2 font-display text-4xl tracking-wide">{otherShop}</h1>
+        <h1 className="mt-2 text-2xl font-bold tracking-tight">{otherShop}</h1>
         <p className="mt-1 text-sm text-muted-foreground">
           About{" "}
           <Link href={`/listings/${listingId}`} className="underline-offset-2 hover:underline">

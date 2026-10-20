@@ -1,10 +1,14 @@
+import { canonicalForm } from "@/lib/constants";
 import type { ListingInput } from "@/lib/types";
 
 export function formatMoney(cents: number | null): string {
   if (cents == null) return "Free";
+  const hasCents = cents % 100 !== 0;
   return new Intl.NumberFormat("en-US", {
     style: "currency",
     currency: "USD",
+    minimumFractionDigits: hasCents ? 2 : 0,
+    maximumFractionDigits: hasCents ? 2 : 0,
   }).format(cents / 100);
 }
 
@@ -13,16 +17,18 @@ export function formatInches(value: number): string {
   return String(rounded);
 }
 
-export function formatDimensions(
-  item: Pick<
-    ListingInput,
-    "form" | "lengthIn" | "widthIn" | "thicknessIn" | "diameterIn"
-  >,
-): string {
+export function formatDimensions(item: {
+  form: string;
+  lengthIn: number | null;
+  widthIn: number | null;
+  thicknessIn: number | null;
+  diameterIn: number | null;
+}): string {
   const inch = (value: number | null) =>
     value == null ? null : formatInches(value);
+  const form = canonicalForm(item.form) ?? item.form;
 
-  if (item.form === "tube") {
+  if (form === "tube-pipe") {
     const od = inch(item.diameterIn);
     const wall = inch(item.thicknessIn);
     const length = inch(item.lengthIn);
@@ -35,7 +41,7 @@ export function formatDimensions(
       .join(" × ");
   }
 
-  if (item.form === "round") {
+  if (form === "bar-round" && item.diameterIn != null) {
     const diameter = inch(item.diameterIn);
     const length = inch(item.lengthIn);
     return [diameter ? `${diameter}" dia` : null, length ? `${length}" L` : null]
@@ -80,6 +86,22 @@ export function formatWeight(pounds: number | null): string | null {
 
 export function formatQuantity(quantity: number): string {
   return `${quantity} ${quantity === 1 ? "pc" : "pcs"}`;
+}
+
+export function formatDelivery(
+  item: Pick<ListingInput, "deliveryMode" | "deliveryRadiusMiles" | "deliveryFeeCents">,
+): string {
+  if (item.deliveryMode !== "delivery") return "Buyer pickup only";
+  const parts = ["Seller can deliver"];
+  if (item.deliveryRadiusMiles != null) {
+    parts.push(`within ${item.deliveryRadiusMiles} mi`);
+  }
+  if (item.deliveryFeeCents != null) {
+    parts.push(
+      item.deliveryFeeCents === 0 ? "no delivery fee" : `${formatMoney(item.deliveryFeeCents)} fee`,
+    );
+  }
+  return parts.join(" · ");
 }
 
 export function formatWhen(timestamp: number): string {

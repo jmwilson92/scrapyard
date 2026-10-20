@@ -20,6 +20,7 @@ import { lookupZip } from "@/lib/zip";
 const LISTING_FIELDS = [
   "title",
   "material",
+  "metalType",
   "alloy",
   "form",
   "lengthIn",
@@ -32,6 +33,11 @@ const LISTING_FIELDS = [
   "zip",
   "notes",
   "isFree",
+  "deliveryMode",
+  "deliveryRadius",
+  "deliveryFee",
+  "certsAvailable",
+  "certsNote",
 ];
 
 export async function createListingAction(
@@ -75,8 +81,10 @@ export async function createListingAction(
   }
 
   revalidatePath("/browse");
+  revalidatePath("/map");
   revalidatePath("/");
   revalidatePath("/account");
+  revalidatePath(`/shops/${user.id}`);
   redirect(`/listings/${id}`);
 }
 
@@ -92,8 +100,10 @@ export async function setListingStatusAction(formData: FormData): Promise<void> 
   if (!updated) notFound();
   revalidatePath(`/listings/${id}`);
   revalidatePath("/browse");
+  revalidatePath("/map");
   revalidatePath("/account");
   revalidatePath("/");
+  revalidatePath(`/shops/${user.id}`);
 }
 
 export async function deleteListingAction(formData: FormData): Promise<void> {
@@ -109,8 +119,10 @@ export async function deleteListingAction(formData: FormData): Promise<void> {
   if (!removed) notFound();
   await deleteStoredPhoto(listing.photoUrl);
   revalidatePath("/browse");
+  revalidatePath("/map");
   revalidatePath("/account");
   revalidatePath("/");
+  revalidatePath(`/shops/${user.id}`);
   redirect("/account?deleted=1");
 }
 

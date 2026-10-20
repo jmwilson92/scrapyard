@@ -5,7 +5,7 @@ import { Button } from "@/components/ui/button";
 export default function NotFound() {
   return (
     <Shell>
-      <h1 className="font-display text-5xl tracking-wide">Not on the board</h1>
+      <h1 className="text-3xl font-bold tracking-tight">Not on the board</h1>
       <p className="mt-3 max-w-md text-base leading-7 text-muted-foreground">
         That page or listing isn&apos;t here. It may have been deleted.
       </p>

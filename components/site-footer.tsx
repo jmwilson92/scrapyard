@@ -2,22 +2,21 @@ import Link from "next/link";
 
 export function SiteFooter() {
   return (
-    <footer className="mt-auto border-t border-border/80">
-      <div className="mx-auto flex w-full max-w-6xl flex-col gap-3 px-4 py-6 text-sm text-muted-foreground sm:flex-row sm:items-center sm:justify-between sm:px-6">
+    <footer className="mt-auto border-t border-neutral-200">
+      <div className="mx-auto flex w-full max-w-7xl flex-col gap-2 px-4 py-6 text-sm text-neutral-500 sm:flex-row sm:items-center sm:justify-between sm:px-6">
+        <p>DropYard is free. Shops settle off the site. No payments run here.</p>
         <p>
-          DropYard is free. Shops settle up at pickup. No payments run through
-          the board.
-        </p>
-        <p>
-          <Link href="/browse" className="underline-offset-2 hover:underline">
-            Browse remnants
+          <Link href="/map" className="hover:underline">
+            Map
           </Link>
           {" · "}
+          Map tiles ©{" "}
+          <a href="https://www.openstreetmap.org/copyright" className="hover:underline">
+            OpenStreetMap
+          </a>
+          {" · "}
           ZIP centroids ©{" "}
-          <a
-            href="https://www.geonames.org/"
-            className="underline-offset-2 hover:underline"
-          >
+          <a href="https://www.geonames.org/" className="hover:underline">
             GeoNames
           </a>
           , CC BY 4.0.
