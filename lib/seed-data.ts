@@ -1,6 +1,6 @@
 import type { DeliveryMode, Material, MetalType, StockForm } from "@/lib/constants";
 
-export const DEMO_PASSWORD = "dropyard-demo";
+export const DEMO_PASSWORD = "skrappily-demo";
 
 export type SeedShop = {
   id: string;
@@ -61,85 +61,85 @@ const VERIFIED_SHOPS = new Set([
 const SHOP_ROWS: Omit<SeedShop, "verifiedSeller">[] = [
   {
     id: "shop-kearny",
-    email: "kearny@demo.dropyard.example",
+    email: "kearny@demo.skrappily.example",
     shopName: "Kearny Mesa Tool & Die",
     zip: "92111",
   },
   {
     id: "shop-mira",
-    email: "mira@demo.dropyard.example",
+    email: "mira@demo.skrappily.example",
     shopName: "Mira Mesa Aero Cuts",
     zip: "92126",
   },
   {
     id: "shop-harbor",
-    email: "harbor@demo.dropyard.example",
+    email: "harbor@demo.skrappily.example",
     shopName: "Harbor Stainless",
     zip: "91910",
   },
   {
     id: "shop-marine",
-    email: "marine@demo.dropyard.example",
+    email: "marine@demo.skrappily.example",
     shopName: "National City Marine Fab",
     zip: "91950",
   },
   {
     id: "shop-elcajon",
-    email: "elcajon@demo.dropyard.example",
+    email: "elcajon@demo.skrappily.example",
     shopName: "El Cajon Job Shop",
     zip: "92020",
   },
   {
     id: "shop-santee",
-    email: "santee@demo.dropyard.example",
+    email: "santee@demo.skrappily.example",
     shopName: "Santee Weldments",
     zip: "92071",
   },
   {
     id: "shop-oceanside",
-    email: "oceanside@demo.dropyard.example",
+    email: "oceanside@demo.skrappily.example",
     shopName: "North County Titanium",
     zip: "92054",
   },
   {
     id: "shop-carlsbad",
-    email: "carlsbad@demo.dropyard.example",
+    email: "carlsbad@demo.skrappily.example",
     shopName: "Carlsbad Screw Machine",
     zip: "92008",
   },
   {
     id: "shop-escondido",
-    email: "escondido@demo.dropyard.example",
+    email: "escondido@demo.skrappily.example",
     shopName: "Escondido Metals",
     zip: "92025",
   },
   {
     id: "shop-sorrento",
-    email: "sorrento@demo.dropyard.example",
+    email: "sorrento@demo.skrappily.example",
     shopName: "Sorrento Plastics",
     zip: "92121",
   },
   {
     id: "shop-lemon",
-    email: "lemon@demo.dropyard.example",
+    email: "lemon@demo.skrappily.example",
     shopName: "Lemon Grove Chassis",
     zip: "91945",
   },
   {
     id: "shop-vista",
-    email: "vista@demo.dropyard.example",
+    email: "vista@demo.skrappily.example",
     shopName: "Vista Sheet Metal",
     zip: "92083",
   },
   {
     id: "shop-barrio",
-    email: "barrio@demo.dropyard.example",
+    email: "barrio@demo.skrappily.example",
     shopName: "Barrio Logan Drops",
     zip: "92113",
   },
   {
     id: "shop-oldtown",
-    email: "oldtown@demo.dropyard.example",
+    email: "oldtown@demo.skrappily.example",
     shopName: "Old Town Precision",
     zip: "92110",
   },

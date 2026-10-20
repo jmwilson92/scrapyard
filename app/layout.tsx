@@ -13,8 +13,8 @@ const sans = DM_Sans({
 
 export const metadata: Metadata = {
   title: {
-    default: "DropYard",
-    template: "%s · DropYard",
+    default: "Skrappily",
+    template: "%s · Skrappily",
   },
   description:
     "A free remnant board for machine shops. List leftover bar, plate, tube, and drops so a nearby shop can buy them instead of the scrap bin.",

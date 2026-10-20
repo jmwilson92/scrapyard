@@ -157,7 +157,7 @@ export function SearchForm({
         </div>
       </div>
       <p className="text-xs leading-5 text-neutral-500">
-        Thickness uses the listed thickness, or the diameter when thickness is blank. Length uses the listed length. Delivery fee is informational — DropYard does not take payment.
+        Thickness uses the listed thickness, or the diameter when thickness is blank. Length uses the listed length. Delivery fee is informational — Skrappily does not take payment.
       </p>
     </form>
   );

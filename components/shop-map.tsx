@@ -12,8 +12,8 @@ let pinIcon: L.DivIcon | null = null;
 
 function getPinIcon(): L.DivIcon {
   pinIcon ??= L.divIcon({
-    className: "dropyard-pin",
-    html: '<span class="dropyard-pin-dot"></span>',
+    className: "skrappily-pin",
+    html: '<span class="skrappily-pin-dot"></span>',
     iconSize: [28, 36],
     iconAnchor: [14, 32],
     popupAnchor: [0, -28],
@@ -29,7 +29,7 @@ export default function ShopMap({ pins }: { pins: ShopPin[] }) {
       center={SAN_DIEGO}
       zoom={10}
       scrollWheelZoom
-      className="dropyard-map w-full rounded-2xl"
+      className="skrappily-map w-full rounded-2xl"
       style={{ height: "min(70vh, 640px)", minHeight: "420px", width: "100%" }}
     >
       <TileLayer

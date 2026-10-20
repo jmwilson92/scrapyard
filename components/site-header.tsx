@@ -15,7 +15,7 @@ export function SiteHeader() {
           href="/"
           className="text-xl font-extrabold tracking-tight text-neutral-950 focus-visible:outline-2 focus-visible:outline-offset-4 focus-visible:outline-ring"
         >
-          Drop<span className="text-primary">Yard</span>
+          Skrap<span className="text-primary">pily</span>
         </Link>
         <div className="order-3 w-full min-w-0 flex-1 lg:order-none">
           <Suspense fallback={<div className="h-12 rounded-full border-2 border-neutral-200" />}>

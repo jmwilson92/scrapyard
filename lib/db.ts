@@ -255,7 +255,7 @@ function resolveConfig(): { url: string; authToken?: string } {
 
   if (process.env.VERCEL && !remote) {
     throw new DatabaseConfigError(
-      "DropYard needs a remote libSQL database on Vercel. Set LIBSQL_URL and LIBSQL_AUTH_TOKEN to a Turso database. The local SQLite file is only for development.",
+      "Skrappily needs a remote libSQL database on Vercel. Set LIBSQL_URL and LIBSQL_AUTH_TOKEN to a Turso database. The local SQLite file is only for development.",
     );
   }
 
@@ -268,7 +268,7 @@ function resolveConfig(): { url: string; authToken?: string } {
     return { url, authToken };
   }
 
-  const fileUrl = url.startsWith("file:") ? url : "file:./data/dropyard.db";
+  const fileUrl = url.startsWith("file:") ? url : "file:./data/skrappily.db";
   const filePath = fileUrl.slice("file:".length);
   fs.mkdirSync(path.dirname(path.resolve(filePath)), { recursive: true });
   return { url: fileUrl };

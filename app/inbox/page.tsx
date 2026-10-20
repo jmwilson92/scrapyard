@@ -16,7 +16,7 @@ export default function InboxPage() {
     <Shell>
       <h1 className="text-3xl font-bold tracking-tight">Inbox</h1>
       <p className="mt-2 text-sm text-muted-foreground">
-        Messages stay on DropYard. Nothing is emailed.
+        Messages stay on Skrappily. Nothing is emailed.
       </p>
       <div className="mt-6">
         <Suspense fallback={<div className="h-40 animate-pulse rounded-xl bg-muted" />}>
