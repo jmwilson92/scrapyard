@@ -9,7 +9,7 @@ import {
 import { getRequestDb } from "@/lib/server-db";
 import type { PublicUser } from "@/lib/types";
 
-const COOKIE = "dropyard_session";
+const COOKIE = "skrappily_session";
 const MAX_AGE_SECONDS = 60 * 60 * 24 * 30;
 
 export async function getCurrentUser(): Promise<PublicUser | null> {

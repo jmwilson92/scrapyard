@@ -113,7 +113,7 @@ async function ListingDetail({
         </div>
         {listing.isExample ? (
           <p className="rounded-2xl bg-neutral-100 px-3 py-2 text-sm leading-6">
-            This shop and listing were seeded so you can try DropYard. They are not real inventory.
+            This shop and listing were seeded so you can try Skrappily. They are not real inventory.
           </p>
         ) : null}
         {listing.status === "sold" ? (
@@ -151,13 +151,13 @@ async function ListingDetail({
         <section className="rounded-2xl bg-neutral-50 px-3 py-3 text-sm leading-6 text-neutral-700">
           <h2 className="font-semibold text-neutral-900">Payment and pickup</h2>
           <p className="mt-1">
-            Buyer and seller settle payment directly. DropYard does not take payment, hold funds, or charge to post or browse.
+            Buyer and seller settle payment directly. Skrappily does not take payment, hold funds, or charge to post or browse.
           </p>
           <ul className="mt-2 list-disc space-y-1 pl-5">
             <li>Meet at the shop during posted hours.</li>
             <li>Check the alloy, size, and quantity before you pay.</li>
             <li>If certs are offered, ask to see the mill test report or certificate of conformance before you leave.</li>
-            <li>A delivery fee on the listing is the seller&apos;s note, not a charge through DropYard.</li>
+            <li>A delivery fee on the listing is the seller&apos;s note, not a charge through Skrappily.</li>
           </ul>
         </section>
 

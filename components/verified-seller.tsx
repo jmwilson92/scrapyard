@@ -18,7 +18,7 @@ export function VerifiedSellerPlaceholder() {
         Verified Seller · $1
       </button>
       <p className="text-xs text-neutral-500">
-        Coming soon. Posting and browsing stay free. DropYard does not take payment yet.
+        Coming soon. Posting and browsing stay free. Skrappily does not take payment yet.
       </p>
     </div>
   );

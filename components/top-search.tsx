@@ -21,7 +21,7 @@ export function TopSearch({ defaultZip = "" }: { defaultZip?: string }) {
         id="q"
         name="q"
         defaultValue={params.get("q") ?? ""}
-        placeholder="Search DropYard"
+        placeholder="Search Skrappily"
         className="h-full min-w-0 flex-1 bg-transparent px-2 text-base outline-none placeholder:text-neutral-400"
       />
       <span className="h-6 w-px shrink-0 bg-neutral-300" aria-hidden />

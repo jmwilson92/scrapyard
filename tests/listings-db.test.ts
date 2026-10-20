@@ -146,7 +146,7 @@ describe("listing records", () => {
     const listings = await listListings(db);
     expect(listings).toHaveLength(SEED_LISTINGS.length);
     expect(listings.every((row) => row.isExample)).toBe(true);
-    const user = await findUserByEmail(db, "kearny@demo.dropyard.example");
+    const user = await findUserByEmail(db, "kearny@demo.skrappily.example");
     expect(user?.shopName).toBe("Kearny Mesa Tool & Die");
     expect(user && (await verifyPassword(DEMO_PASSWORD, user.passwordHash))).toBe(
       true,
@@ -166,7 +166,7 @@ describe("listing records", () => {
   });
 
   it("migrates older listings onto metal type, form groups, and pickup", async () => {
-    const file = path.join(os.tmpdir(), `dropyard-${crypto.randomUUID()}.db`);
+    const file = path.join(os.tmpdir(), `skrappily-${crypto.randomUUID()}.db`);
     files.push(file);
     const db = createDbClient(`file:${file}`);
     await db.execute(`CREATE TABLE users (
@@ -253,7 +253,7 @@ describe("listing records", () => {
 });
 
 async function tempDb(): Promise<Client> {
-  const file = path.join(os.tmpdir(), `dropyard-${crypto.randomUUID()}.db`);
+  const file = path.join(os.tmpdir(), `skrappily-${crypto.randomUUID()}.db`);
   files.push(file);
   const db = createDbClient(`file:${file}`);
   await migrate(db);

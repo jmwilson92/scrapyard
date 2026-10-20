@@ -1,6 +1,6 @@
-# DropYard
+# Skrappily
 
-DropYard is a free remnant-metal board for machine shops. A shop lists leftover plate, bar, tube, angle, or mixed scrap. Nearby shops search by metal type (6061, 7075, 5052, mild steel, 304, 316, copper, brass, bronze, titanium, and others), form, thickness, length, price, distance from a ZIP code, and whether the seller can deliver. They message the seller in the app. A map shows each shop as a pin. Nothing is charged on the site. A delivery fee or a material-cert note is information for the buyer. Sellers choose buyer pickup or that they can deliver. A future $1 Verified Seller badge is shown from a shop flag and is not for sale yet. Posting and browsing stay free.
+Skrappily is a free remnant-metal board for machine shops. A shop lists leftover plate, bar, tube, angle, or mixed scrap. Nearby shops search by metal type (6061, 7075, 5052, mild steel, 304, 316, copper, brass, bronze, titanium, and others), form, thickness, length, price, distance from a ZIP code, and whether the seller can deliver. They message the seller in the app. A map shows each shop as a pin. Nothing is charged on the site. A delivery fee or a material-cert note is information for the buyer. Sellers choose buyer pickup or that they can deliver. A future $1 Verified Seller badge is shown from a shop flag and is not for sale yet. Posting and browsing stay free.
 
 Example listings around San Diego are seeded so the board is usable on first run. They are marked **Example** and are not live inventory.
 
@@ -15,7 +15,7 @@ npm run dev
 
 Open [http://127.0.0.1:3847](http://127.0.0.1:3847).
 
-No environment variables are required. Listings are stored in `data/dropyard.db` (SQLite via libSQL). Uploaded photos go in `data/uploads/` and are served from `/uploads/...`.
+No environment variables are required. Listings are stored in `data/skrappily.db` (SQLite via libSQL). Uploaded photos go in `data/uploads/` and are served from `/uploads/...`.
 
 ```bash
 npm test
@@ -23,7 +23,7 @@ npm run lint
 npm run build
 ```
 
-Delete `data/dropyard.db` and restart to load the example listings again. Set `SEED_EXAMPLE_DATA=false` before the first boot if you want an empty board.
+Delete `data/skrappily.db` and restart to load the example listings again. Set `SEED_EXAMPLE_DATA=false` before the first boot if you want an empty board.
 
 ## GitHub Codespaces
 
@@ -39,30 +39,30 @@ The codespace only has the files that are on GitHub. Open the scrapyard repo and
 
 3. Open the **Ports** tab. Port **3847** shows up once Next.js is ready. Click the globe on that row to open the app.
 
-No environment variables are required. Sign in as `kearny@demo.dropyard.example` with password `dropyard-demo`, or create your own shop.
+No environment variables are required. Sign in as `kearny@demo.skrappily.example` with password `skrappily-demo`, or create your own shop.
 
 Stop the codespace from [github.com/codespaces](https://github.com/codespaces) when you are done. The free plan counts the hours it stays running.
 
 ## Example shops
 
-Every seeded shop uses the password `dropyard-demo`.
+Every seeded shop uses the password `skrappily-demo`.
 
 | Shop | Email | ZIP |
 | --- | --- | --- |
-| Kearny Mesa Tool & Die | kearny@demo.dropyard.example | 92111 |
-| Mira Mesa Aero Cuts | mira@demo.dropyard.example | 92126 |
-| Harbor Stainless | harbor@demo.dropyard.example | 91910 |
-| National City Marine Fab | marine@demo.dropyard.example | 91950 |
-| El Cajon Job Shop | elcajon@demo.dropyard.example | 92020 |
-| Santee Weldments | santee@demo.dropyard.example | 92071 |
-| North County Titanium | oceanside@demo.dropyard.example | 92054 |
-| Carlsbad Screw Machine | carlsbad@demo.dropyard.example | 92008 |
-| Escondido Metals | escondido@demo.dropyard.example | 92025 |
-| Sorrento Plastics | sorrento@demo.dropyard.example | 92121 |
-| Lemon Grove Chassis | lemon@demo.dropyard.example | 91945 |
-| Vista Sheet Metal | vista@demo.dropyard.example | 92083 |
-| Barrio Logan Drops | barrio@demo.dropyard.example | 92113 |
-| Old Town Precision | oldtown@demo.dropyard.example | 92110 |
+| Kearny Mesa Tool & Die | kearny@demo.skrappily.example | 92111 |
+| Mira Mesa Aero Cuts | mira@demo.skrappily.example | 92126 |
+| Harbor Stainless | harbor@demo.skrappily.example | 91910 |
+| National City Marine Fab | marine@demo.skrappily.example | 91950 |
+| El Cajon Job Shop | elcajon@demo.skrappily.example | 92020 |
+| Santee Weldments | santee@demo.skrappily.example | 92071 |
+| North County Titanium | oceanside@demo.skrappily.example | 92054 |
+| Carlsbad Screw Machine | carlsbad@demo.skrappily.example | 92008 |
+| Escondido Metals | escondido@demo.skrappily.example | 92025 |
+| Sorrento Plastics | sorrento@demo.skrappily.example | 92121 |
+| Lemon Grove Chassis | lemon@demo.skrappily.example | 91945 |
+| Vista Sheet Metal | vista@demo.skrappily.example | 92083 |
+| Barrio Logan Drops | barrio@demo.skrappily.example | 92113 |
+| Old Town Precision | oldtown@demo.skrappily.example | 92110 |
 
 Sign in as one of those shops to mark an example listing sold or to read a message you sent it. Create your own account for real listings.
 
@@ -78,7 +78,7 @@ Copy `.env.example` to `.env.local` only when you need something other than the 
 | `STORAGE_PROVIDER` | No | `local` (default) or `blob`. |
 | `BLOB_READ_WRITE_TOKEN` | For blob photos | Vercel Blob token. If this is set and `STORAGE_PROVIDER` is empty, photos use Blob. |
 
-When `LIBSQL_URL` is unset, the app uses `file:./data/dropyard.db`. A `file:` URL is also accepted for a different local path.
+When `LIBSQL_URL` is unset, the app uses `file:./data/skrappily.db`. A `file:` URL is also accepted for a different local path.
 
 ## Deploy on Vercel
 
@@ -88,9 +88,9 @@ The app is a Next.js App Router project and stays on the Node.js runtime. The Ho
 2. Create a free [Turso](https://turso.tech) database:
 
    ```bash
-   turso db create dropyard
-   turso db show dropyard --url
-   turso db tokens create dropyard
+   turso db create skrappily
+   turso db show skrappily --url
+   turso db tokens create skrappily
    ```
 
 3. In the Vercel project, set:
