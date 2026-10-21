@@ -1,18 +1,18 @@
 import Link from "next/link";
 import { Suspense } from "react";
 import { deleteListingAction, setListingStatusAction } from "@/app/actions/listings";
-import { ShopForm } from "@/components/auth-forms";
+import { CompanyForm } from "@/components/auth-forms";
 import { DatabaseSetup } from "@/components/database-setup";
 import { Shell } from "@/components/shell";
 import { VerifiedSellerBadge, VerifiedSellerPlaceholder } from "@/components/verified-seller";
 import { Button } from "@/components/ui/button";
-import { formatMoney } from "@/lib/format";
-import { listListingsBySeller } from "@/lib/repo";
+import { formatListingPrice } from "@/lib/format";
+import { getCompanyById, listListingsBySeller } from "@/lib/repo";
 import { loadRequestDb } from "@/lib/server-db";
 import { getCurrentUser } from "@/lib/session";
 import { redirect } from "next/navigation";
 
-export const metadata = { title: "Your shop" };
+export const metadata = { title: "Your company" };
 
 type SearchParams = Promise<Record<string, string | string[] | undefined>>;
 
@@ -36,7 +36,23 @@ async function AccountBody({ searchParams }: { searchParams: SearchParams }) {
   const user = await getCurrentUser();
   if (!user) redirect("/login?next=/account");
 
-  const listings = await listListingsBySeller(loaded.db, user.id);
+  const [listings, company] = await Promise.all([
+    listListingsBySeller(loaded.db, user.id),
+    user.companyId ? getCompanyById(loaded.db, user.companyId) : Promise.resolve(null),
+  ]);
+  const companyDefaults: Record<string, string> = {
+    companyName: company?.name ?? user.shopName,
+    businessType: company?.businessType ?? "",
+    street: company?.street ?? "",
+    city: company?.city ?? "",
+    state: company?.state ?? "",
+    zip: company?.zip ?? user.zip,
+    serviceRadius: company?.serviceRadiusMiles != null ? String(company.serviceRadiusMiles) : "",
+    ein: company?.ein ?? "",
+    website: company?.website ?? "",
+    contactName: company?.contactName ?? "",
+    contactPhone: company?.contactPhone ?? "",
+  };
   const deleted = first(params.deleted) === "1";
 
   return (
@@ -45,7 +61,7 @@ async function AccountBody({ searchParams }: { searchParams: SearchParams }) {
         <h1 className="text-3xl font-bold tracking-tight">{user.shopName}</h1>
         <p className="mt-1 text-sm">
           <Link href={`/shops/${user.id}`} className="font-semibold text-primary">
-            View public shop
+            View company profile
           </Link>
         </p>
         <p className="mt-2 text-sm text-muted-foreground">{user.email}</p>
@@ -53,6 +69,13 @@ async function AccountBody({ searchParams }: { searchParams: SearchParams }) {
           {user.verifiedSeller ? <VerifiedSellerBadge /> : null}
           <VerifiedSellerPlaceholder />
         </div>
+        {!user.profileComplete ? (
+          <p role="status" className="mt-3 max-w-2xl rounded-lg bg-destructive/10 px-3 py-2 text-sm leading-6 text-destructive">
+            Skrappily is business-to-business only. Finish your company profile
+            below (business type, city, state, and contact) to post listings,
+            post wanted requests, and message other businesses.
+          </p>
+        ) : null}
         {user.isExample ? (
           <p className="mt-3 max-w-2xl rounded-lg bg-secondary px-3 py-2 text-sm leading-6">
             You&apos;re signed in as a seeded example shop. Listings you change
@@ -67,18 +90,23 @@ async function AccountBody({ searchParams }: { searchParams: SearchParams }) {
       </div>
 
       <section className="rounded-xl bg-card p-4 ring-1 ring-foreground/10 sm:p-6">
-        <h2 className="text-xl font-bold">Shop details</h2>
+        <h2 className="text-xl font-bold">Company profile</h2>
         <div className="mt-4">
-          <ShopForm shopName={user.shopName} zip={user.zip} />
+          <CompanyForm defaults={companyDefaults} />
         </div>
       </section>
 
       <section>
         <div className="mb-4 flex items-center justify-between gap-3">
           <h2 className="text-xl font-bold">Your listings</h2>
-          <Button nativeButton={false} render={<Link href="/listings/new" />} className="h-11 px-4">
-            List a drop
-          </Button>
+          <div className="flex flex-wrap gap-2">
+            <Button nativeButton={false} render={<Link href="/listings/new?type=wanted" />} variant="outline" className="h-11 bg-card px-4">
+              Post a wanted
+            </Button>
+            <Button nativeButton={false} render={<Link href="/listings/new" />} className="h-11 px-4">
+              List material
+            </Button>
+          </div>
         </div>
         {listings.length === 0 ? (
           <p className="rounded-xl bg-card p-5 text-sm ring-1 ring-foreground/10">
@@ -96,7 +124,8 @@ async function AccountBody({ searchParams }: { searchParams: SearchParams }) {
                     {listing.title}
                   </Link>
                   <p className="mt-1 text-sm text-muted-foreground">
-                    {listing.alloy} · {listing.zip} · {formatMoney(listing.priceCents)} ·{" "}
+                    {listing.listingType === "wanted" ? "Wanted · " : ""}
+                    {listing.alloy ? `${listing.alloy} · ` : ""}{listing.zip} · {formatListingPrice(listing)} ·{" "}
                     {listing.status === "sold" ? "Sold" : "Available"}
                     {listing.isExample ? " · Example" : ""}
                   </p>

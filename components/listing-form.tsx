@@ -6,6 +6,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
+import { LISTING_TYPES } from "@/lib/business";
 import { CATEGORIES, FORMS, METAL_TYPES, subtypesFor } from "@/lib/constants";
 import { emptyFormState } from "@/lib/form-state";
 
@@ -13,13 +14,21 @@ const fieldClass = "h-11 w-full rounded-xl bg-white text-base md:text-base";
 const selectClass =
   "h-11 w-full rounded-xl border border-input bg-white px-3 text-base outline-none focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/50";
 
-export function ListingForm({ defaultZip }: { defaultZip: string }) {
+export function ListingForm({
+  defaultZip,
+  defaultType = "offer",
+}: {
+  defaultZip: string;
+  defaultType?: "offer" | "wanted";
+}) {
   const [state, action, pending] = useActionState(createListingAction, {
     ...emptyFormState,
-    values: { zip: defaultZip, quantity: "1", category: "metal", metalType: "al-6061", form: "bar-round", deliveryMode: "pickup" },
+    values: { listingType: defaultType, zip: defaultZip, quantity: "1", category: "metal", metalType: "al-6061", form: "bar-round", deliveryMode: "pickup" },
   });
   const values = state.values;
   const [category, setCategory] = useState(values.category || "metal");
+  const [listingType, setListingType] = useState(values.listingType || defaultType);
+  const isWanted = listingType === "wanted";
   const isMetal = category === "metal";
   const subtypes = isMetal ? [] : subtypesFor(category);
 
@@ -30,13 +39,52 @@ export function ListingForm({ defaultZip }: { defaultZip: string }) {
           {state.formError}
         </p>
       ) : null}
+      <fieldset className="grid gap-2">
+        <legend className="text-sm font-medium">Post type</legend>
+        <div className="grid grid-cols-2 gap-2">
+          {LISTING_TYPES.map((option) => (
+            <label
+              key={option.value}
+              className={
+                listingType === option.value
+                  ? "flex min-h-11 items-center gap-2 rounded-xl border-2 border-primary bg-white px-3 text-sm font-semibold"
+                  : "flex min-h-11 items-center gap-2 rounded-xl border border-input bg-white px-3 text-sm"
+              }
+            >
+              <input
+                type="radio"
+                name="listingType"
+                value={option.value}
+                checked={listingType === option.value}
+                onChange={() => setListingType(option.value)}
+                className="size-4 accent-primary"
+              />
+              {option.value === "offer" ? "Selling" : "Wanted"}
+            </label>
+          ))}
+        </div>
+        {state.errors.listingType ? (
+          <p className="text-sm text-destructive">{state.errors.listingType}</p>
+        ) : null}
+        <p className="text-sm text-neutral-500">
+          {isWanted
+            ? "Tell suppliers what your business needs. They reply in your inbox with what they have."
+            : "Offer surplus, scrap, or remnant material to other businesses."}
+        </p>
+      </fieldset>
       <Field label="Title" name="title" error={state.errors.title}>
         <Input
           id="title"
           name="title"
           className={fieldClass}
           defaultValue={values.title}
-          placeholder={isMetal ? "6061-T6 plate drops, half inch" : "2x6 lumber offcuts, 3 to 6 ft"}
+          placeholder={
+            isWanted
+              ? "Need: 1/2 in 6061 plate, 12 x 12 or larger"
+              : isMetal
+                ? "6061-T6 plate drops, half inch"
+                : "2x6 lumber offcuts, 3 to 6 ft"
+          }
           required
         />
       </Field>
@@ -201,10 +249,14 @@ export function ListingForm({ defaultZip }: { defaultZip: string }) {
       </fieldset>
       <div className="grid gap-4 sm:grid-cols-[1fr_auto] sm:items-end">
         <Field
-          label="Lot price (USD)"
+          label={isWanted ? "Target budget (USD, optional)" : "Lot price (USD)"}
           name="price"
           error={state.errors.price}
-          hint="What you want for everything in the lot."
+          hint={
+            isWanted
+              ? "Leave blank to take quotes."
+              : "What you want for everything in the lot."
+          }
         >
           <Input
             id="price"
@@ -215,15 +267,17 @@ export function ListingForm({ defaultZip }: { defaultZip: string }) {
             placeholder="36"
           />
         </Field>
-        <label className="flex min-h-11 items-center gap-2 text-sm font-medium">
-          <input
-            type="checkbox"
-            name="isFree"
-            defaultChecked={values.isFree === "on"}
-            className="size-4 accent-primary"
-          />
-          Free
-        </label>
+        {isWanted ? null : (
+          <label className="flex min-h-11 items-center gap-2 text-sm font-medium">
+            <input
+              type="checkbox"
+              name="isFree"
+              defaultChecked={values.isFree === "on"}
+              className="size-4 accent-primary"
+            />
+            Free
+          </label>
+        )}
       </div>
       {isMetal ? (
       <fieldset className="grid gap-3 rounded-2xl border border-neutral-200 p-4">

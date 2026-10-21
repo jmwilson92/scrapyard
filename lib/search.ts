@@ -38,6 +38,7 @@ export type SearchableListing = {
   widthIn?: number | null;
   deliveryMode?: string;
   certsAvailable?: boolean;
+  listingType?: string;
 };
 
 export type SearchHit<T extends SearchableListing> = T & {
@@ -61,6 +62,8 @@ export type SearchQuery = {
   includeSold: boolean;
   deliveryOnly: boolean;
   certsOnly: boolean;
+  /** "offer" or "wanted"; undefined shows both. */
+  listingType?: "offer" | "wanted";
 };
 
 export type SearchResult<T extends SearchableListing> =
@@ -86,6 +89,7 @@ export function parseSearchQuery(input: QueryInput): SearchQuery {
   const free = first(input.free).trim();
   const delivery = first(input.delivery).trim();
   const certs = first(input.certs).trim();
+  const kind = first(input.kind).trim().toLowerCase();
 
   let maxPriceCents: number | null = null;
   if (maxRaw) {
@@ -126,6 +130,7 @@ export function parseSearchQuery(input: QueryInput): SearchQuery {
     includeSold: false,
     deliveryOnly: delivery === "1",
     certsOnly: certs === "1",
+    listingType: kind === "offer" || kind === "wanted" ? kind : undefined,
   };
 }
 
@@ -168,8 +173,10 @@ export function searchListings<T extends SearchableListing>(
     if (length && !matchesBucket(listing.lengthIn ?? null, length)) continue;
     if (query.deliveryOnly && listing.deliveryMode !== "delivery") continue;
     if (query.certsOnly && !listing.certsAvailable) continue;
+    if (query.listingType && (listing.listingType ?? "offer") !== query.listingType) continue;
+    const isWanted = listing.listingType === "wanted";
 
-    const free = listing.priceCents == null;
+    const free = listing.priceCents == null && !isWanted;
     if (free && !query.includeFree) continue;
     if (
       query.maxPriceCents != null &&

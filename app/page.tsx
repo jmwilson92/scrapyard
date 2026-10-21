@@ -16,9 +16,9 @@ export default function HomePage() {
       <CategoryChips query={query} />
       <div className="mt-4 mb-4 flex items-end justify-between gap-3">
         <div>
-          <h1 className="text-2xl font-bold tracking-tight">Scrap and remnant materials nearby</h1>
+          <h1 className="text-2xl font-bold tracking-tight">Business-to-business material network</h1>
           <p className="mt-1 max-w-xl text-sm leading-6 text-neutral-500">
-            Leftover metal, lumber, construction materials, plastics, glass, and wire from shops and job sites. Example cards around San Diego are sample inventory, not live stock.
+            Shops, fabricators, contractors, manufacturers, and suppliers buy, sell, and source metal, lumber, construction materials, plastics, glass, and wire from each other. Post surplus, or post a wanted request when your supplier runs short. Business accounts only. Example cards around San Diego are sample inventory, not live stock.
           </p>
         </div>
         <Link href="/browse?zip=92101&miles=50" className="inline-flex min-h-11 shrink-0 items-center text-sm font-semibold text-primary md:min-h-0">
@@ -42,7 +42,7 @@ async function Featured() {
   if (results.length === 0) {
     return (
       <p className="rounded-2xl border border-neutral-200 p-5 text-sm">
-        The board is empty. Be the first to list scrap or remnant material.
+        The board is empty. Be the first business to post material.
       </p>
     );
   }

@@ -1,18 +1,28 @@
 import type { Client } from "@libsql/client";
 import { canonicalForm, isCategory, isDeliveryMode, isMetalType } from "@/lib/constants";
+import {
+  isListingType,
+  isProfileComplete,
+  type Company,
+  type CompanyInput,
+  type ListingType,
+} from "@/lib/business";
 import type { Listing, ListingInput, MessageRow, PublicUser, UserRecord } from "@/lib/types";
 
 const LISTING_SELECT = `
   SELECT
-    l.id, l.seller_id, u.shop_name, u.zip AS shop_zip, l.title, l.category, l.subtype, l.material,
+    l.id, l.seller_id, COALESCE(c.name, u.shop_name) AS shop_name,
+    COALESCE(c.zip, u.zip) AS shop_zip, l.company_id, l.listing_type,
+    COALESCE(c.business_type, '') AS business_type, l.title, l.category, l.subtype, l.material,
     l.metal_type, l.alloy, l.form,
     l.length_in, l.width_in, l.thickness_in, l.diameter_in,
     l.quantity, l.weight_lbs, l.price_cents, l.zip, l.notes, l.photo_url,
     l.status, l.is_example, l.delivery_mode, l.delivery_radius_miles,
-    l.delivery_fee_cents, l.certs_available, l.certs_note, u.verified_seller,
+    l.delivery_fee_cents, l.certs_available, l.certs_note, COALESCE(c.verified, u.verified_seller) AS verified_seller,
     l.created_at, l.updated_at
   FROM listings l
   JOIN users u ON u.id = l.seller_id
+  LEFT JOIN companies c ON c.id = l.company_id
 `;
 
 export async function insertUser(
@@ -80,28 +90,25 @@ export async function updateUserShop(
   });
 }
 
+const PUBLIC_USER_SELECT = `SELECT u.id, u.email, u.shop_name, u.zip, u.is_example, u.verified_seller,
+    u.company_id, c.name AS company_name, c.business_type, c.city, c.state,
+    c.zip AS company_zip, c.contact_name
+  FROM users u
+  LEFT JOIN companies c ON c.id = u.company_id`;
+
 export async function findUserBySession(
   db: Client,
   tokenHash: string,
   now = Date.now(),
 ): Promise<PublicUser | null> {
   const result = await db.execute({
-    sql: `SELECT u.id, u.email, u.shop_name, u.zip, u.is_example, u.verified_seller
-      FROM sessions s
-      JOIN users u ON u.id = s.user_id
+    sql: `${PUBLIC_USER_SELECT}
+      JOIN sessions s ON s.user_id = u.id
       WHERE s.token_hash = ? AND s.expires_at > ?`,
     args: [tokenHash, now],
   });
   const row = result.rows[0];
-  if (!row) return null;
-  return {
-    id: text(row.id),
-    email: text(row.email),
-    shopName: text(row.shop_name),
-    zip: text(row.zip),
-    isExample: flag(row.is_example),
-    verifiedSeller: flag(row.verified_seller),
-  };
+  return row ? mapPublicUser(row) : null;
 }
 
 export async function findPublicUserById(
@@ -109,19 +116,152 @@ export async function findPublicUserById(
   id: string,
 ): Promise<PublicUser | null> {
   const result = await db.execute({
-    sql: `SELECT id, email, shop_name, zip, is_example, verified_seller FROM users WHERE id = ?`,
+    sql: `${PUBLIC_USER_SELECT} WHERE u.id = ?`,
+    args: [id],
+  });
+  const row = result.rows[0];
+  return row ? mapPublicUser(row) : null;
+}
+
+function mapPublicUser(row: Record<string, unknown>): PublicUser {
+  const companyId = row.company_id == null || row.company_id === "" ? null : text(row.company_id);
+  return {
+    id: text(row.id),
+    email: text(row.email),
+    shopName: text(row.company_name ?? row.shop_name),
+    zip: text(row.company_zip ?? row.zip),
+    isExample: flag(row.is_example),
+    verifiedSeller: flag(row.verified_seller),
+    companyId,
+    profileComplete:
+      companyId != null &&
+      isProfileComplete({
+        name: text(row.company_name ?? ""),
+        businessType: text(row.business_type ?? ""),
+        city: text(row.city ?? ""),
+        state: text(row.state ?? ""),
+        zip: text(row.company_zip ?? ""),
+        contactName: text(row.contact_name ?? ""),
+      }),
+  };
+}
+
+const COMPANY_COLUMNS = `id, name, business_type, street, city, state, zip, service_radius_miles,
+  ein, website, contact_name, contact_phone, is_example, verified, created_at`;
+
+export async function insertCompany(
+  db: Client,
+  company: CompanyInput & { id: string; isExample?: boolean; verified?: boolean; createdAt?: number },
+): Promise<void> {
+  await db.execute({
+    sql: `INSERT INTO companies (${COMPANY_COLUMNS}) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+    args: [
+      company.id,
+      company.name,
+      company.businessType,
+      company.street,
+      company.city,
+      company.state,
+      company.zip,
+      company.serviceRadiusMiles,
+      company.ein,
+      company.website,
+      company.contactName,
+      company.contactPhone,
+      company.isExample ? 1 : 0,
+      company.verified ? 1 : 0,
+      company.createdAt ?? Date.now(),
+    ],
+  });
+}
+
+export async function getCompanyById(db: Client, id: string): Promise<Company | null> {
+  const result = await db.execute({
+    sql: `SELECT ${COMPANY_COLUMNS} FROM companies WHERE id = ?`,
     args: [id],
   });
   const row = result.rows[0];
   if (!row) return null;
   return {
     id: text(row.id),
-    email: text(row.email),
-    shopName: text(row.shop_name),
+    name: text(row.name),
+    businessType: text(row.business_type) as Company["businessType"],
+    street: text(row.street),
+    city: text(row.city),
+    state: text(row.state),
     zip: text(row.zip),
+    serviceRadiusMiles: optionalNum(row.service_radius_miles),
+    ein: text(row.ein),
+    website: text(row.website),
+    contactName: text(row.contact_name),
+    contactPhone: text(row.contact_phone),
     isExample: flag(row.is_example),
-    verifiedSeller: flag(row.verified_seller),
+    verified: flag(row.verified),
+    createdAt: num(row.created_at),
   };
+}
+
+/** The user account that owns a company (one owner per company for now). */
+export async function findCompanyOwnerId(db: Client, companyId: string): Promise<string | null> {
+  const result = await db.execute({
+    sql: "SELECT id FROM users WHERE company_id = ? ORDER BY created_at ASC LIMIT 1",
+    args: [companyId],
+  });
+  const row = result.rows[0];
+  return row ? text(row.id) : null;
+}
+
+/** Saves the profile and keeps the legacy users.shop_name / zip in sync. */
+export async function updateCompany(
+  db: Client,
+  companyId: string,
+  company: CompanyInput,
+): Promise<void> {
+  await db.batch(
+    [
+      {
+        sql: `UPDATE companies SET name = ?, business_type = ?, street = ?, city = ?, state = ?,
+          zip = ?, service_radius_miles = ?, ein = ?, website = ?, contact_name = ?, contact_phone = ?
+          WHERE id = ?`,
+        args: [
+          company.name,
+          company.businessType,
+          company.street,
+          company.city,
+          company.state,
+          company.zip,
+          company.serviceRadiusMiles,
+          company.ein,
+          company.website,
+          company.contactName,
+          company.contactPhone,
+          companyId,
+        ],
+      },
+      {
+        sql: "UPDATE users SET shop_name = ?, zip = ? WHERE company_id = ?",
+        args: [company.name, company.zip, companyId],
+      },
+    ],
+    "write",
+  );
+}
+
+export async function attachUserToCompany(
+  db: Client,
+  userId: string,
+  companyId: string,
+): Promise<void> {
+  await db.batch(
+    [
+      { sql: "UPDATE users SET company_id = ? WHERE id = ?", args: [companyId, userId] },
+      {
+        sql: "UPDATE listings SET company_id = ? WHERE seller_id = ? AND (company_id IS NULL OR company_id = '')",
+        args: [companyId, userId],
+      },
+    ],
+    "write",
+  );
 }
 
 export async function createSession(
@@ -144,7 +284,8 @@ export async function deleteSession(db: Client, tokenHash: string): Promise<void
 
 export async function insertListing(
   db: Client,
-  listing: ListingInput & {
+  listing: Omit<ListingInput, "listingType"> & {
+    listingType?: ListingType;
     id: string;
     sellerId: string;
     photoUrl: string | null;
@@ -159,8 +300,9 @@ export async function insertListing(
       length_in, width_in, thickness_in, diameter_in,
       quantity, weight_lbs, price_cents, zip, notes, photo_url,
       status, is_example, delivery_mode, delivery_radius_miles, delivery_fee_cents,
-      certs_available, certs_note, created_at, updated_at
-    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'active', ?, ?, ?, ?, ?, ?, ?, ?)`,
+      certs_available, certs_note, created_at, updated_at, listing_type, company_id
+    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'active', ?, ?, ?, ?, ?, ?, ?, ?, ?,
+      (SELECT company_id FROM users WHERE id = ?))`,
     args: [
       listing.id,
       listing.sellerId,
@@ -189,6 +331,8 @@ export async function insertListing(
       listing.certsNote,
       createdAt,
       createdAt,
+      listing.listingType ?? "offer",
+      listing.sellerId,
     ],
   });
 }
@@ -420,6 +564,9 @@ function mapListing(row: Record<string, unknown>): Listing {
     status,
     isExample: flag(row.is_example),
     sellerVerified: flag(row.verified_seller),
+    companyId: row.company_id == null || row.company_id === "" ? null : text(row.company_id),
+    businessType: text(row.business_type ?? ""),
+    listingType: isListingType(text(row.listing_type)) ? (text(row.listing_type) as ListingType) : "offer",
     deliveryMode: isDeliveryMode(deliveryRaw) ? deliveryRaw : "pickup",
     deliveryRadiusMiles: optionalNum(row.delivery_radius_miles),
     deliveryFeeCents: optionalNum(row.delivery_fee_cents),

@@ -17,7 +17,7 @@ export const metadata: Metadata = {
     template: "%s · Skrappily",
   },
   description:
-    "A free board for scrap and remnant materials. Shops and contractors list leftover metal, lumber, construction materials, plastics, glass, and wire so someone nearby can use them instead of the dumpster.",
+    "A free business-to-business network for material. Shops, fabricators, contractors, manufacturers, and suppliers buy, sell, and source metal, lumber, construction materials, plastics, glass, and wire from each other, including when their usual suppliers run short.",
 };
 
 export const viewport: Viewport = {

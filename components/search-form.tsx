@@ -39,6 +39,7 @@ export function SearchForm({
     query.includeFree ? undefined : "free",
     query.deliveryOnly ? "delivery" : undefined,
     query.certsOnly ? "certs" : undefined,
+    query.listingType,
   ].filter(Boolean).length;
 
   return (
@@ -161,6 +162,14 @@ export function SearchForm({
             placeholder="Any"
             className={controlClass}
           />
+        </label>
+        <label className="grid gap-1 text-xs font-semibold text-neutral-600">
+          Post type
+          <select name="kind" defaultValue={query.listingType ?? ""} className={controlClass}>
+            <option value="">Selling and wanted</option>
+            <option value="offer">Selling only</option>
+            <option value="wanted">Wanted (RFQs) only</option>
+          </select>
         </label>
         <label className="grid gap-1 text-xs font-semibold text-neutral-600">
           Free lots

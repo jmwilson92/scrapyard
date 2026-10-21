@@ -87,8 +87,10 @@ function AccountNav({
           href="/login?next=/listings/new"
           className="inline-flex min-h-11 items-center justify-center rounded-full bg-primary px-3 py-1.5 text-white hover:bg-primary/90 md:min-h-0"
         >
-          Sell
+          Post material
         </Link>
+        <HeaderLink href="/login?next=/listings/new%3Ftype%3Dwanted">Post a wanted</HeaderLink>
+        <HeaderLink href="/register">Join as a business</HeaderLink>
         <HeaderLink href="/login">Sign in</HeaderLink>
       </>
     );
@@ -100,8 +102,9 @@ function AccountNav({
         href="/listings/new"
         className="inline-flex min-h-11 items-center justify-center rounded-full bg-primary px-3 py-1.5 text-white hover:bg-primary/90 md:min-h-0"
       >
-        Sell
+        Post material
       </Link>
+      <HeaderLink href="/listings/new?type=wanted">Post a wanted</HeaderLink>
       <HeaderLink href="/inbox">
         Inbox
         {unread > 0 ? (

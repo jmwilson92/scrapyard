@@ -1,6 +1,9 @@
+import type { ListingType } from "@/lib/business";
 import type { Category, DeliveryMode, Material, MetalType, StockForm } from "@/lib/constants";
 
 export type ListingInput = {
+  /** "offer" sells material; "wanted" is a request for material. */
+  listingType: ListingType;
   title: string;
   category: Category;
   /** Metal: same as metalType. Other categories: a SUBTYPES value. */
@@ -31,6 +34,8 @@ export type Listing = ListingInput & {
   shopName: string;
   shopZip: string;
   sellerVerified: boolean;
+  companyId: string | null;
+  businessType: string;
   photoUrl: string | null;
   status: "active" | "sold";
   isExample: boolean;
@@ -56,6 +61,9 @@ export type PublicUser = {
   zip: string;
   isExample: boolean;
   verifiedSeller: boolean;
+  companyId: string | null;
+  /** True once the company profile has the required business details. */
+  profileComplete: boolean;
 };
 
 export type MessageRow = {

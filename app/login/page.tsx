@@ -26,16 +26,16 @@ export default function LoginPage({ searchParams }: { searchParams: SearchParams
             </Suspense>
           </div>
           <p className="mt-4 text-sm">
-            New shop?{" "}
+            New business?{" "}
             <Link href="/register" className="font-semibold text-copper">
               Create an account
             </Link>
           </p>
         </div>
         <aside className="rounded-xl bg-secondary p-5">
-          <h2 className="text-xl font-bold">Example shops</h2>
+          <h2 className="text-xl font-bold">Example companies</h2>
           <p className="mt-2 text-sm leading-6">
-            Every seeded shop uses the password{" "}
+            Every seeded company uses the password{" "}
             <code className="font-semibold">{DEMO_PASSWORD}</code>. These
             accounts and their listings are sample data.
           </p>

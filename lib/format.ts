@@ -112,3 +112,14 @@ export function formatWhen(timestamp: number): string {
     minute: "2-digit",
   }).format(timestamp);
 }
+
+/** Price line for a card or listing; wanted posts show a budget or "Taking quotes". */
+export function formatListingPrice(item: {
+  listingType?: string;
+  priceCents: number | null;
+}): string {
+  if (item.listingType === "wanted") {
+    return item.priceCents == null ? "Taking quotes" : `Budget ${formatMoney(item.priceCents)}`;
+  }
+  return formatMoney(item.priceCents);
+}

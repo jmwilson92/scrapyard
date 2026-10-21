@@ -19,7 +19,14 @@ export async function sendMessageAction(
   const values = { body: stringField(formData, "body") };
   const user = await getCurrentUser();
   if (!user) {
-    return { errors: {}, values, formError: "Sign in to message this shop." };
+    return { errors: {}, values, formError: "Sign in with your business account to message." };
+  }
+  if (!user.profileComplete) {
+    return {
+      errors: {},
+      values,
+      formError: "Finish your company profile on the Account page before messaging other businesses.",
+    };
   }
   if (!isSafeId(listingId) || (recipientId && !isSafeId(recipientId))) {
     return { errors: {}, values, formError: "That conversation isn't available." };

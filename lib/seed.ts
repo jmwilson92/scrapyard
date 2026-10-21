@@ -1,10 +1,13 @@
 import type { InStatement, ResultSet } from "@libsql/client";
 import { hashPassword } from "@/lib/passwords";
+import { lookupZip } from "@/lib/zip";
 import {
   NON_METAL_SEED_LISTINGS,
   SEED_LISTINGS,
   SEED_SHOPS,
   DEMO_PASSWORD,
+  EXAMPLE_BUSINESS_TYPES,
+  exampleCompanyId,
   type SeedListing,
 } from "@/lib/seed-data";
 
@@ -94,4 +97,51 @@ async function insertSeedListings(
       ],
     });
   }
+}
+
+/**
+ * Gives every user without a company its own company, then attaches that
+ * user's listings to it. Example shops get complete example profiles; real
+ * accounts get a draft profile (name + ZIP) they must finish before posting.
+ * Safe to run on every boot: it only touches rows with no company yet.
+ */
+export async function ensureCompanies(db: Executor): Promise<void> {
+  const users = await db.execute(
+    `SELECT id, shop_name, zip, is_example, verified_seller, created_at
+     FROM users WHERE company_id IS NULL OR company_id = ''`,
+  );
+  for (const row of users.rows) {
+    const userId = String(row.id);
+    const isExample = Number(row.is_example ?? 0) === 1;
+    const zip = String(row.zip ?? "");
+    const place = lookupZip(zip);
+    const companyId = exampleCompanyId(userId);
+    await db.execute({
+      sql: `INSERT OR IGNORE INTO companies
+        (id, name, business_type, street, city, state, zip, service_radius_miles,
+         ein, website, contact_name, contact_phone, is_example, verified, created_at)
+        VALUES (?, ?, ?, '', ?, ?, ?, ?, '', '', ?, '', ?, ?, ?)`,
+      args: [
+        companyId,
+        String(row.shop_name ?? "Company"),
+        isExample ? (EXAMPLE_BUSINESS_TYPES[userId] ?? "machine-shop") : "",
+        place?.city ?? "",
+        place?.state ?? "",
+        zip,
+        isExample ? 50 : null,
+        isExample ? "Example contact" : "",
+        isExample ? 1 : 0,
+        Number(row.verified_seller ?? 0) === 1 ? 1 : 0,
+        Number(row.created_at ?? Date.now()),
+      ],
+    });
+    await db.execute({
+      sql: "UPDATE users SET company_id = ? WHERE id = ?",
+      args: [companyId, userId],
+    });
+  }
+  await db.execute(
+    `UPDATE listings SET company_id = (SELECT u.company_id FROM users u WHERE u.id = listings.seller_id)
+     WHERE company_id IS NULL OR company_id = ''`,
+  );
 }
