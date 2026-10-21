@@ -19,6 +19,8 @@ import { lookupZip } from "@/lib/zip";
 
 const LISTING_FIELDS = [
   "title",
+  "category",
+  "subtype",
   "material",
   "metalType",
   "alloy",

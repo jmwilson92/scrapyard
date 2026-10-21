@@ -158,3 +158,22 @@
   font-family: inherit;
   border-radius: 1rem;
 }
+/* Mobile: never scroll sideways, keep Leaflet controls finger-sized. */
+html,
+body {
+  overflow-x: clip;
+}
+
+@media (max-width: 767px) {
+  .skrappily-map .leaflet-control-zoom a {
+    width: 44px;
+    height: 44px;
+    line-height: 44px;
+    font-size: 22px;
+  }
+  .skrappily-map .leaflet-popup-content a {
+    display: inline-flex;
+    min-height: 44px;
+    align-items: center;
+  }
+}
