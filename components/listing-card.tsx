@@ -1,6 +1,7 @@
 import Link from "next/link";
 import { ListingPhoto } from "@/components/listing-photo";
 import { VerifiedSellerBadge } from "@/components/verified-seller";
+import { categoryLabel, subtypeLabel } from "@/lib/constants";
 import { formatDelivery, formatDistance, formatMoney } from "@/lib/format";
 import type { Listing } from "@/lib/types";
 import { lookupZip } from "@/lib/zip";
@@ -37,7 +38,7 @@ export function ListingCard({
               Sold
             </span>
           ) : null}
-          {listing.certsAvailable ? (
+          {listing.category === "metal" && listing.certsAvailable ? (
             <span className="rounded-full bg-neutral-900 px-2 py-0.5 text-xs font-semibold text-white">
               Certs
             </span>
@@ -61,6 +62,11 @@ export function ListingCard({
         <h2 className="mt-0.5 line-clamp-2 text-sm leading-5 text-neutral-800 group-hover:underline">
           {listing.title}
         </h2>
+        <p className="mt-0.5 line-clamp-1 text-xs font-medium text-neutral-600">
+          {listing.category === "metal"
+            ? subtypeLabel("metal", listing.metalType)
+            : `${categoryLabel(listing.category)} · ${subtypeLabel(listing.category, listing.subtype)}`}
+        </p>
         <p className="mt-0.5 text-xs text-neutral-500">
           {where}
           {listing.priceCents != null ? " · lot" : ""}
