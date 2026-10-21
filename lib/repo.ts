@@ -1,10 +1,10 @@
 import type { Client } from "@libsql/client";
-import { canonicalForm, isDeliveryMode, isMetalType } from "@/lib/constants";
+import { canonicalForm, isCategory, isDeliveryMode, isMetalType } from "@/lib/constants";
 import type { Listing, ListingInput, MessageRow, PublicUser, UserRecord } from "@/lib/types";
 
 const LISTING_SELECT = `
   SELECT
-    l.id, l.seller_id, u.shop_name, u.zip AS shop_zip, l.title, l.material,
+    l.id, l.seller_id, u.shop_name, u.zip AS shop_zip, l.title, l.category, l.subtype, l.material,
     l.metal_type, l.alloy, l.form,
     l.length_in, l.width_in, l.thickness_in, l.diameter_in,
     l.quantity, l.weight_lbs, l.price_cents, l.zip, l.notes, l.photo_url,
@@ -155,16 +155,18 @@ export async function insertListing(
   const createdAt = listing.createdAt ?? Date.now();
   await db.execute({
     sql: `INSERT INTO listings (
-      id, seller_id, title, material, metal_type, alloy, form,
+      id, seller_id, title, category, subtype, material, metal_type, alloy, form,
       length_in, width_in, thickness_in, diameter_in,
       quantity, weight_lbs, price_cents, zip, notes, photo_url,
       status, is_example, delivery_mode, delivery_radius_miles, delivery_fee_cents,
       certs_available, certs_note, created_at, updated_at
-    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'active', ?, ?, ?, ?, ?, ?, ?, ?)`,
+    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'active', ?, ?, ?, ?, ?, ?, ?, ?)`,
     args: [
       listing.id,
       listing.sellerId,
       listing.title,
+      listing.category,
+      listing.subtype,
       listing.material,
       listing.metalType,
       listing.alloy,
@@ -389,14 +391,20 @@ function mapListing(row: Record<string, unknown>): Listing {
   const status = text(row.status) === "sold" ? "sold" : "active";
   const metalRaw = text(row.metal_type);
   const deliveryRaw = text(row.delivery_mode);
+  const categoryRaw = text(row.category);
+  const category = isCategory(categoryRaw) ? categoryRaw : "metal";
+  const metalType = isMetalType(metalRaw) ? metalRaw : "other";
+  const subtypeRaw = text(row.subtype);
   return {
     id: text(row.id),
     sellerId: text(row.seller_id),
     shopName: text(row.shop_name),
     shopZip: text(row.shop_zip || row.zip),
     title: text(row.title),
+    category,
+    subtype: subtypeRaw || (category === "metal" ? metalType : "other"),
     material: text(row.material) as Listing["material"],
-    metalType: isMetalType(metalRaw) ? metalRaw : "other",
+    metalType,
     alloy: text(row.alloy),
     form: canonicalForm(text(row.form)) ?? "bar-round",
     lengthIn: optionalNum(row.length_in),

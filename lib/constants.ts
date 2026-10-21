@@ -34,7 +34,84 @@ export const FORMS = [
   { value: "tube-pipe", label: "Tube / pipe" },
   { value: "angle-channel", label: "Angle / channel" },
   { value: "scrap-mixed", label: "Scrap / mixed" },
+  { value: "lot-bundle", label: "Lot / bundle" },
+  { value: "pieces-units", label: "Pieces / units" },
 ] as const;
+
+export const CATEGORIES = [
+  { value: "metal", label: "Metal" },
+  { value: "wood", label: "Wood / lumber" },
+  { value: "construction", label: "Construction materials" },
+  { value: "plastics", label: "Plastics" },
+  { value: "glass", label: "Glass" },
+  { value: "electrical", label: "Electrical / wire" },
+  { value: "other", label: "Other" },
+] as const;
+
+export type Category = (typeof CATEGORIES)[number]["value"];
+
+/** Subtypes for non-metal categories. Metal uses METAL_TYPES instead. */
+export const SUBTYPES = [
+  { value: "dimensional-lumber", label: "Dimensional lumber", category: "wood" },
+  { value: "plywood-sheet", label: "Plywood / sheet goods", category: "wood" },
+  { value: "hardwood", label: "Hardwood", category: "wood" },
+  { value: "pallets", label: "Pallets / crating", category: "wood" },
+  { value: "wood-other", label: "Wood (other)", category: "wood" },
+  { value: "drywall", label: "Drywall", category: "construction" },
+  { value: "concrete-block", label: "Concrete / block", category: "construction" },
+  { value: "brick", label: "Brick / pavers", category: "construction" },
+  { value: "tile", label: "Tile / stone", category: "construction" },
+  { value: "roofing", label: "Roofing", category: "construction" },
+  { value: "insulation", label: "Insulation", category: "construction" },
+  { value: "pipe-fittings", label: "Pipe / fittings", category: "construction" },
+  { value: "fixtures", label: "Fixtures", category: "construction" },
+  { value: "construction-other", label: "Construction (other)", category: "construction" },
+  { value: "acrylic", label: "Acrylic", category: "plastics" },
+  { value: "polycarbonate", label: "Polycarbonate", category: "plastics" },
+  { value: "hdpe-uhmw", label: "HDPE / UHMW", category: "plastics" },
+  { value: "delrin-nylon", label: "Delrin / nylon", category: "plastics" },
+  { value: "pvc", label: "PVC", category: "plastics" },
+  { value: "plastics-other", label: "Plastic (other)", category: "plastics" },
+  { value: "flat-glass", label: "Flat / sheet glass", category: "glass" },
+  { value: "tempered", label: "Tempered", category: "glass" },
+  { value: "windows-mirrors", label: "Windows / mirrors", category: "glass" },
+  { value: "glass-other", label: "Glass (other)", category: "glass" },
+  { value: "building-wire", label: "Building wire", category: "electrical" },
+  { value: "conduit", label: "Conduit", category: "electrical" },
+  { value: "boxes-breakers", label: "Boxes / breakers", category: "electrical" },
+  { value: "lighting", label: "Lighting", category: "electrical" },
+  { value: "electrical-other", label: "Electrical (other)", category: "electrical" },
+  { value: "other", label: "Other", category: "other" },
+] as const;
+
+export type Subtype = (typeof SUBTYPES)[number]["value"];
+
+export function isCategory(value: string): value is Category {
+  return CATEGORIES.some((item) => item.value === value);
+}
+
+export function categoryLabel(value: string): string {
+  return CATEGORIES.find((item) => item.value === value)?.label ?? value;
+}
+
+export function isSubtypeFor(category: string, value: string): boolean {
+  if (category === "metal") return isMetalType(value);
+  return SUBTYPES.some((item) => item.value === value && item.category === category);
+}
+
+export function subtypesFor(category: string): readonly { value: string; label: string }[] {
+  if (category === "metal") return METAL_TYPES;
+  return SUBTYPES.filter((item) => item.category === category);
+}
+
+export function subtypeLabel(category: string, value: string): string {
+  if (category === "metal") return metalTypeLabel(value);
+  return SUBTYPES.find((item) => item.value === value)?.label ?? value;
+}
+
+export function defaultSubtype(category: string): string {
+  return subtypesFor(category)[0]?.value ?? "other";
+}
 
 export const THICKNESS_BUCKETS = [
   { value: "lt-0.125", label: 'Under 1/8"', min: 0, max: 0.125 },
