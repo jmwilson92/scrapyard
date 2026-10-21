@@ -46,6 +46,8 @@ describe("listing records", () => {
       id: "lot-1",
       sellerId: "shop-1",
       title: "6061-T6 round drops",
+      category: "metal",
+      subtype: "al-6061",
       material: "aluminum",
       alloy: "6061-T6",
       form: "bar-round",
