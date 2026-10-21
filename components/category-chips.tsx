@@ -1,5 +1,5 @@
 import Link from "next/link";
-import { MATERIALS } from "@/lib/constants";
+import { CATEGORIES } from "@/lib/constants";
 import { toSearchParams, type SearchQuery } from "@/lib/search";
 import { cn } from "cn";
 
@@ -13,16 +13,19 @@ export function CategoryChips({
   view?: string;
 }) {
   const chips = [
-    { label: "All", material: null },
-    ...MATERIALS.map((item) => ({ label: item.label, material: item.value })),
+    { label: "All", category: null },
+    ...CATEGORIES.map((item) => ({ label: item.label, category: item.value })),
   ];
 
   return (
     <nav aria-label="Categories" className="-mx-1 flex gap-2 overflow-x-auto px-1 pb-1">
       {chips.map((chip) => {
-        const active = chip.material == null ? !query.material : query.material === chip.material;
+        const active =
+          chip.category == null ? !query.category : query.category === chip.category;
         const params = toSearchParams(query, {
-          material: chip.material,
+          category: chip.category,
+          subtype: null,
+          material: null,
           metalType: null,
           view: view ?? null,
         });
@@ -34,7 +37,7 @@ export function CategoryChips({
             href={href}
             aria-current={active ? "true" : undefined}
             className={cn(
-              "shrink-0 rounded-full border px-3.5 py-1.5 text-sm font-semibold",
+              "inline-flex min-h-11 shrink-0 items-center rounded-full border px-3.5 py-1.5 md:min-h-0 text-sm font-semibold",
               active
                 ? "border-neutral-900 bg-neutral-900 text-white"
                 : "border-neutral-300 bg-white text-neutral-800 hover:bg-neutral-50",

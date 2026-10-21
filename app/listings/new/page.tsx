@@ -4,13 +4,13 @@ import { ListingForm } from "@/components/listing-form";
 import { Shell } from "@/components/shell";
 import { getCurrentUser } from "@/lib/session";
 
-export const metadata = { title: "List a drop" };
+export const metadata = { title: "List scrap or remnant material" };
 
 export default function NewListingPage() {
   return (
     <Shell>
       <div className="mx-auto max-w-2xl">
-        <h1 className="text-3xl font-bold tracking-tight">List a drop</h1>
+        <h1 className="text-3xl font-bold tracking-tight">List scrap or remnant material</h1>
         <p className="mt-2 text-base leading-7 text-neutral-500">
           Price the whole lot. Choose buyer pickup or say you can deliver. Skrappily doesn&apos;t take payment.
         </p>
