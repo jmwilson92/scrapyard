@@ -1,15 +1,18 @@
 import {
+  CATEGORIES,
   FORMS,
   LENGTH_BUCKETS,
   METAL_TYPES,
   MILES_OPTIONS,
   THICKNESS_BUCKETS,
+  subtypesFor,
 } from "@/lib/constants";
+import { FiltersDrawer } from "@/components/filters-drawer";
 import type { SearchQuery } from "@/lib/search";
 import { Button } from "@/components/ui/button";
 
 const controlClass =
-  "h-10 w-full rounded-xl border border-neutral-300 bg-white px-3 text-sm outline-none focus-visible:border-neutral-900";
+  "h-11 w-full rounded-xl md:h-10 border border-neutral-300 bg-white px-3 text-sm outline-none focus-visible:border-neutral-900";
 
 export function SearchForm({
   query,
@@ -22,12 +25,29 @@ export function SearchForm({
   action?: string;
   view?: string;
 }) {
+  const showMetal = !query.category || query.category === "metal";
+  const subtypes = query.category && query.category !== "metal" ? subtypesFor(query.category) : [];
+  const activeCount = [
+    query.category,
+    query.subtype,
+    query.metalType,
+    query.form,
+    query.thickness,
+    query.length,
+    query.alloy,
+    query.maxPriceCents != null ? "max" : undefined,
+    query.includeFree ? undefined : "free",
+    query.deliveryOnly ? "delivery" : undefined,
+    query.certsOnly ? "certs" : undefined,
+  ].filter(Boolean).length;
+
   return (
+    <FiltersDrawer activeCount={activeCount}>
     <form action={action} method="get" className="grid gap-3 rounded-2xl border border-neutral-200 bg-white p-3 sm:p-4">
       {query.q ? <input type="hidden" name="q" value={query.q} /> : null}
       {query.material ? <input type="hidden" name="material" value={query.material} /> : null}
       {view ? <input type="hidden" name="view" value={view} /> : null}
-      <div className="grid grid-cols-2 gap-3 md:grid-cols-3 xl:grid-cols-6">
+      <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 md:grid-cols-3 xl:grid-cols-6">
         <label className="grid gap-1 text-xs font-semibold text-neutral-600">
           ZIP code
           <input
@@ -55,16 +75,41 @@ export function SearchForm({
           </select>
         </label>
         <label className="grid gap-1 text-xs font-semibold text-neutral-600">
-          Metal type
-          <select name="metal" defaultValue={query.metalType ?? ""} className={controlClass}>
-            <option value="">Any metal</option>
-            {METAL_TYPES.map((item) => (
+          Category
+          <select name="category" defaultValue={query.category ?? ""} className={controlClass}>
+            <option value="">All materials</option>
+            {CATEGORIES.map((item) => (
               <option key={item.value} value={item.value}>
                 {item.label}
               </option>
             ))}
           </select>
         </label>
+        {showMetal ? (
+          <label className="grid gap-1 text-xs font-semibold text-neutral-600">
+            Metal type
+            <select name="metal" defaultValue={query.metalType ?? ""} className={controlClass}>
+              <option value="">Any metal</option>
+              {METAL_TYPES.map((item) => (
+                <option key={item.value} value={item.value}>
+                  {item.label}
+                </option>
+              ))}
+            </select>
+          </label>
+        ) : (
+          <label className="grid gap-1 text-xs font-semibold text-neutral-600">
+            Type
+            <select name="type" defaultValue={query.subtype ?? ""} className={controlClass}>
+              <option value="">Any type</option>
+              {subtypes.map((item) => (
+                <option key={item.value} value={item.value}>
+                  {item.label}
+                </option>
+              ))}
+            </select>
+          </label>
+        )}
         <label className="grid gap-1 text-xs font-semibold text-neutral-600">
           Form
           <select name="form" defaultValue={query.form ?? ""} className={controlClass}>
@@ -99,7 +144,7 @@ export function SearchForm({
           </select>
         </label>
         <label className="grid gap-1 text-xs font-semibold text-neutral-600">
-          Grade contains
+          Grade or spec contains
           <input
             name="alloy"
             defaultValue={query.alloy ?? ""}
@@ -124,7 +169,7 @@ export function SearchForm({
             <option value="0">Hide free</option>
           </select>
         </label>
-        <label className="flex items-end gap-2 pb-2 text-sm font-semibold">
+        <label className="flex min-h-11 items-center gap-2 text-sm font-semibold md:min-h-0 md:items-end md:pb-2">
           <input
             type="checkbox"
             name="delivery"
@@ -134,7 +179,8 @@ export function SearchForm({
           />
           Delivery available
         </label>
-        <label className="flex items-end gap-2 pb-2 text-sm font-semibold">
+        {showMetal ? (
+        <label className="flex min-h-11 items-center gap-2 text-sm font-semibold md:min-h-0 md:items-end md:pb-2">
           <input
             type="checkbox"
             name="certs"
@@ -144,13 +190,14 @@ export function SearchForm({
           />
           Material certs available
         </label>
-        <div className="col-span-2 flex items-end gap-2 md:col-span-2 xl:col-span-2">
-          <Button type="submit" className="h-10 flex-1 rounded-full px-4 text-sm font-semibold">
+        ) : null}
+        <div className="flex items-end gap-2 sm:col-span-2 md:col-span-2 xl:col-span-2">
+          <Button type="submit" className="h-11 flex-1 rounded-full md:h-10 px-4 text-sm font-semibold">
             Apply filters
           </Button>
           <a
             href={action}
-            className="inline-flex h-10 items-center justify-center rounded-full border border-neutral-300 px-4 text-sm font-semibold hover:bg-neutral-50"
+            className="inline-flex h-11 items-center md:h-10 justify-center rounded-full border border-neutral-300 px-4 text-sm font-semibold hover:bg-neutral-50"
           >
             Clear
           </a>
@@ -160,5 +207,6 @@ export function SearchForm({
         Thickness uses the listed thickness, or the diameter when thickness is blank. Length uses the listed length. Delivery fee is informational — Skrappily does not take payment.
       </p>
     </form>
+    </FiltersDrawer>
   );
 }
