@@ -1,22 +1,27 @@
 "use client";
 
-import { useActionState } from "react";
+import { useActionState, useState } from "react";
 import { createListingAction } from "@/app/actions/listings";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
-import { FORMS, METAL_TYPES } from "@/lib/constants";
+import { CATEGORIES, FORMS, METAL_TYPES, subtypesFor } from "@/lib/constants";
 import { emptyFormState } from "@/lib/form-state";
 
-const fieldClass = "h-11 rounded-xl bg-white text-base md:text-base";
+const fieldClass = "h-11 w-full rounded-xl bg-white text-base md:text-base";
+const selectClass =
+  "h-11 w-full rounded-xl border border-input bg-white px-3 text-base outline-none focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/50";
 
 export function ListingForm({ defaultZip }: { defaultZip: string }) {
   const [state, action, pending] = useActionState(createListingAction, {
     ...emptyFormState,
-    values: { zip: defaultZip, quantity: "1", metalType: "al-6061", form: "bar-round", deliveryMode: "pickup" },
+    values: { zip: defaultZip, quantity: "1", category: "metal", metalType: "al-6061", form: "bar-round", deliveryMode: "pickup" },
   });
   const values = state.values;
+  const [category, setCategory] = useState(values.category || "metal");
+  const isMetal = category === "metal";
+  const subtypes = isMetal ? [] : subtypesFor(category);
 
   return (
     <form action={action} className="grid gap-4">
@@ -31,27 +36,62 @@ export function ListingForm({ defaultZip }: { defaultZip: string }) {
           name="title"
           className={fieldClass}
           defaultValue={values.title}
-          placeholder="6061-T6 plate drops, half inch"
+          placeholder={isMetal ? "6061-T6 plate drops, half inch" : "2x6 lumber offcuts, 3 to 6 ft"}
           required
         />
       </Field>
       <div className="grid gap-4 sm:grid-cols-2">
-        <Field label="Metal type" name="metalType" error={state.errors.metalType}>
-          <Select
-            id="metalType"
-            name="metalType"
-            defaultValue={values.metalType || "al-6061"}
-            options={METAL_TYPES}
-          />
+        <Field label="Category" name="category" error={state.errors.category}>
+          <select
+            id="category"
+            name="category"
+            value={category}
+            onChange={(event) => setCategory(event.target.value)}
+            className={selectClass}
+          >
+            {CATEGORIES.map((option) => (
+              <option key={option.value} value={option.value}>
+                {option.label}
+              </option>
+            ))}
+          </select>
         </Field>
-        <Field label="Alloy or grade" name="alloy" error={state.errors.alloy}>
+        {isMetal ? (
+          <Field label="Metal type" name="metalType" error={state.errors.metalType}>
+            <Select
+              id="metalType"
+              name="metalType"
+              defaultValue={values.metalType || "al-6061"}
+              options={METAL_TYPES}
+            />
+          </Field>
+        ) : (
+          <Field label="Type" name="subtype" error={state.errors.subtype}>
+            <Select
+              key={category}
+              id="subtype"
+              name="subtype"
+              defaultValue={
+                subtypes.some((item) => item.value === values.subtype)
+                  ? values.subtype
+                  : subtypes[0]?.value
+              }
+              options={subtypes}
+            />
+          </Field>
+        )}
+        <Field
+          label={isMetal ? "Alloy or grade" : "Spec or grade (optional)"}
+          name="alloy"
+          error={state.errors.alloy}
+        >
           <Input
             id="alloy"
             name="alloy"
             className={fieldClass}
             defaultValue={values.alloy}
-            placeholder="6061-T6"
-            required
+            placeholder={isMetal ? "6061-T6" : "Doug fir #2, 1/2 in regular, 12/2 NM-B"}
+            required={isMetal}
           />
         </Field>
         <Field label="Form" name="form" error={state.errors.form}>
@@ -69,7 +109,7 @@ export function ListingForm({ defaultZip }: { defaultZip: string }) {
         </Field>
       </div>
       <p className="text-sm leading-6 text-neutral-500">
-        Inches. Plate and sheet: thickness, width, and length. Bar and round: diameter or thickness, plus length. Tube and pipe: diameter is OD, thickness is wall. Angle: leg width and thickness. Leave the ones that don&apos;t apply blank.
+        {isMetal ? "" : "Optional for non-metal lots. "}Inches. Plate and sheet: thickness, width, and length. Bar and round: diameter or thickness, plus length. Tube and pipe: diameter is OD, thickness is wall. Angle: leg width and thickness. Leave the ones that don&apos;t apply blank.
       </p>
       <div className="grid gap-4 sm:grid-cols-2">
         <Field label="Length (in)" name="lengthIn" error={state.errors.lengthIn}>
@@ -106,7 +146,7 @@ export function ListingForm({ defaultZip }: { defaultZip: string }) {
       </div>
       <fieldset className="grid gap-3 rounded-2xl border border-neutral-200 p-4">
         <legend className="px-1 text-sm font-semibold">Delivery</legend>
-        <label className="flex items-center gap-2 text-sm font-medium">
+        <label className="flex min-h-11 items-center gap-2 text-sm font-medium">
           <input
             type="radio"
             name="deliveryMode"
@@ -116,7 +156,7 @@ export function ListingForm({ defaultZip }: { defaultZip: string }) {
           />
           Buyer pickup only
         </label>
-        <label className="flex items-center gap-2 text-sm font-medium">
+        <label className="flex min-h-11 items-center gap-2 text-sm font-medium">
           <input
             type="radio"
             name="deliveryMode"
@@ -175,7 +215,7 @@ export function ListingForm({ defaultZip }: { defaultZip: string }) {
             placeholder="36"
           />
         </Field>
-        <label className="flex h-11 items-center gap-2 text-sm font-medium">
+        <label className="flex min-h-11 items-center gap-2 text-sm font-medium">
           <input
             type="checkbox"
             name="isFree"
@@ -185,9 +225,10 @@ export function ListingForm({ defaultZip }: { defaultZip: string }) {
           Free
         </label>
       </div>
+      {isMetal ? (
       <fieldset className="grid gap-3 rounded-2xl border border-neutral-200 p-4">
         <legend className="px-1 text-sm font-semibold">Material certifications</legend>
-        <label className="flex items-center gap-2 text-sm font-medium">
+        <label className="flex min-h-11 items-center gap-2 text-sm font-medium">
           <input
             type="checkbox"
             name="certsAvailable"
@@ -211,6 +252,7 @@ export function ListingForm({ defaultZip }: { defaultZip: string }) {
           />
         </Field>
       </fieldset>
+      ) : null}
       <Field label="Notes" name="notes" hint="Condition, hours, how to find the door.">
         <Textarea
           id="notes"
@@ -250,7 +292,7 @@ function Select({
       id={id}
       name={name}
       defaultValue={defaultValue}
-      className="h-11 w-full rounded-xl border border-input bg-white px-3 text-base outline-none focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/50"
+      className={selectClass}
     >
       {options.map((option) => (
         <option key={option.value} value={option.value}>

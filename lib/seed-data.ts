@@ -1,4 +1,4 @@
-import type { DeliveryMode, Material, MetalType, StockForm } from "@/lib/constants";
+import type { Category, DeliveryMode, Material, MetalType, StockForm } from "@/lib/constants";
 
 export const DEMO_PASSWORD = "skrappily-demo";
 
@@ -14,6 +14,8 @@ export type SeedListing = {
   id: string;
   sellerId: string;
   title: string;
+  category: Category;
+  subtype: string;
   material: Material;
   metalType: MetalType;
   alloy: string;
@@ -159,7 +161,10 @@ const CERT_NOTES: Record<string, string> = {
   "ex-17": "Certificate of conformance for the 932 bearing bronze.",
 };
 
-const LISTING_ROWS: Omit<SeedListing, "certsAvailable" | "certsNote">[] = [
+type SeedRow = Omit<SeedListing, "certsAvailable" | "certsNote" | "category" | "subtype"> &
+  Partial<Pick<SeedListing, "category" | "subtype">>;
+
+const LISTING_ROWS: SeedRow[] = [
   {
     id: "ex-01",
     sellerId: "shop-kearny",
@@ -502,8 +507,151 @@ const LISTING_ROWS: Omit<SeedListing, "certsAvailable" | "certsNote">[] = [
   },
 ];
 
-export const SEED_LISTINGS: SeedListing[] = LISTING_ROWS.map((listing) => ({
-  ...listing,
-  certsAvailable: Boolean(CERT_NOTES[listing.id]),
-  certsNote: CERT_NOTES[listing.id] ?? "",
-}));
+/** Non-metal sample lots, added after launch. Also back-filled into seeded databases. */
+const NON_METAL_ROWS: SeedRow[] = [
+  {
+    id: "ex-18",
+    sellerId: "shop-barrio",
+    category: "wood",
+    subtype: "dimensional-lumber",
+    title: "Doug fir 2x6 offcuts, 3 to 6 ft",
+    material: "other",
+    metalType: "other",
+    alloy: "Doug fir #2",
+    form: "lot-bundle",
+    lengthIn: 72,
+    widthIn: 5.5,
+    thicknessIn: 1.5,
+    diameterIn: null,
+    quantity: 30,
+    weightLbs: null,
+    priceCents: 4000,
+    zip: "92113",
+    notes:
+      "About thirty 2x6 offcuts from a framing job. Dry, no nails. Good for blocking or shop jigs.",
+    ...pickup,
+  },
+  {
+    id: "ex-19",
+    sellerId: "shop-santee",
+    category: "construction",
+    subtype: "drywall",
+    title: "1/2 inch drywall, 4x8 sheets, 12 left",
+    material: "other",
+    metalType: "other",
+    alloy: "Regular 1/2 in",
+    form: "plate-sheet",
+    lengthIn: 96,
+    widthIn: 48,
+    thicknessIn: 0.5,
+    diameterIn: null,
+    quantity: 12,
+    weightLbs: null,
+    priceCents: 6000,
+    zip: "92071",
+    notes: "Twelve full sheets left over from a remodel. Stored inside, corners clean.",
+    ...deliver(15, 2500),
+  },
+  {
+    id: "ex-20",
+    sellerId: "shop-escondido",
+    category: "construction",
+    subtype: "tile",
+    title: "Porcelain floor tile, 12x24, about 80 sq ft",
+    material: "other",
+    metalType: "other",
+    alloy: "Matte gray porcelain",
+    form: "lot-bundle",
+    lengthIn: 24,
+    widthIn: 12,
+    thicknessIn: 0.375,
+    diameterIn: null,
+    quantity: 40,
+    weightLbs: 200,
+    priceCents: 9000,
+    zip: "92025",
+    notes: "Ten unopened boxes of matte gray porcelain. Same dye lot.",
+    ...pickup,
+  },
+  {
+    id: "ex-21",
+    sellerId: "shop-sorrento",
+    category: "plastics",
+    subtype: "acrylic",
+    title: "Clear acrylic sheet drops, 1/4 inch",
+    material: "other",
+    metalType: "other",
+    alloy: "Cast acrylic",
+    form: "plate-sheet",
+    lengthIn: 24,
+    widthIn: 18,
+    thicknessIn: 0.25,
+    diameterIn: null,
+    quantity: 6,
+    weightLbs: null,
+    priceCents: 3000,
+    zip: "92121",
+    notes: "Six cast acrylic drops with film still on both sides.",
+    ...pickup,
+  },
+  {
+    id: "ex-22",
+    sellerId: "shop-lemon",
+    category: "electrical",
+    subtype: "building-wire",
+    title: "12/2 Romex, partial 250 ft roll",
+    material: "other",
+    metalType: "other",
+    alloy: "12/2 NM-B",
+    form: "lot-bundle",
+    lengthIn: null,
+    widthIn: null,
+    thicknessIn: null,
+    diameterIn: null,
+    quantity: 1,
+    weightLbs: null,
+    priceCents: 5500,
+    zip: "91945",
+    notes: "About 140 feet left on a 250 ft roll of 12/2 with ground.",
+    ...pickup,
+  },
+  {
+    id: "ex-23",
+    sellerId: "shop-vista",
+    category: "glass",
+    subtype: "windows-mirrors",
+    title: "Vinyl dual-pane windows, 3 units",
+    material: "other",
+    metalType: "other",
+    alloy: "Dual pane, low-E",
+    form: "pieces-units",
+    lengthIn: 48,
+    widthIn: 36,
+    thicknessIn: null,
+    diameterIn: null,
+    quantity: 3,
+    weightLbs: null,
+    priceCents: null,
+    zip: "92083",
+    notes: "Three wrong-size windows from a job. Free to whoever picks them up.",
+    ...pickup,
+  },
+];
+
+function finish(listing: SeedRow): SeedListing {
+  const category = listing.category ?? "metal";
+  return {
+    ...listing,
+    category,
+    subtype: listing.subtype ?? (category === "metal" ? listing.metalType : "other"),
+    certsAvailable: category === "metal" && Boolean(CERT_NOTES[listing.id]),
+    certsNote: category === "metal" ? (CERT_NOTES[listing.id] ?? "") : "",
+  };
+}
+
+export const NON_METAL_SEED_LISTINGS: SeedListing[] = NON_METAL_ROWS.map(finish);
+
+export const SEED_LISTINGS: SeedListing[] = [
+  ...LISTING_ROWS.map(finish),
+  ...NON_METAL_SEED_LISTINGS,
+];

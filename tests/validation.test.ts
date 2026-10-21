@@ -95,7 +95,7 @@ describe("messages and reports", () => {
 
 describe("seed data", () => {
   it("has example listings on real San Diego area ZIPs", () => {
-    expect(SEED_LISTINGS.length).toBe(17);
+    expect(SEED_LISTINGS.length).toBe(23);
     expect(new Set(SEED_LISTINGS.map((row) => row.material)).size).toBe(9);
     for (const listing of SEED_LISTINGS) {
       expect(SEED_SHOPS.some((shop) => shop.id === listing.sellerId)).toBe(true);
@@ -103,6 +103,8 @@ describe("seed data", () => {
       const parsed = parseListingForm(
         {
           title: listing.title,
+          category: listing.category,
+          subtype: listing.subtype,
           material: listing.material,
           metalType: listing.metalType,
           alloy: listing.alloy,

@@ -29,8 +29,10 @@ export default function ShopMap({ pins }: { pins: ShopPin[] }) {
       center={SAN_DIEGO}
       zoom={10}
       scrollWheelZoom
+      touchZoom
+      bounceAtZoomLimits={false}
       className="skrappily-map w-full rounded-2xl"
-      style={{ height: "min(70vh, 640px)", minHeight: "420px", width: "100%" }}
+      style={{ height: "min(70vh, 640px)", minHeight: "min(420px, 60vh)", width: "100%" }}
     >
       <TileLayer
         attribution='&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a>'
@@ -44,6 +46,11 @@ export default function ShopMap({ pins }: { pins: ShopPin[] }) {
             <span className="mt-1 block text-sm">
               {pin.count} active {pin.count === 1 ? "listing" : "listings"}
             </span>
+            {pin.categories.length > 0 ? (
+              <span className="mt-0.5 block text-xs text-neutral-600">
+                {pin.categories.join(" · ")}
+              </span>
+            ) : null}
             <a href={`/shops/${pin.sellerId}`} className="mt-1 inline-block text-sm font-semibold">
               View shop
             </a>

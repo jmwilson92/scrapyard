@@ -1,4 +1,4 @@
-import type { Metadata } from "next";
+import type { Metadata, Viewport } from "next";
 import { DM_Sans } from "next/font/google";
 import { SiteFooter } from "@/components/site-footer";
 import { SiteHeader } from "@/components/site-header";
@@ -17,7 +17,14 @@ export const metadata: Metadata = {
     template: "%s · Skrappily",
   },
   description:
-    "A free remnant board for machine shops. List leftover bar, plate, tube, and drops so a nearby shop can buy them instead of the scrap bin.",
+    "A free board for scrap and remnant materials. Shops and contractors list leftover metal, lumber, construction materials, plastics, glass, and wire so someone nearby can use them instead of the dumpster.",
+};
+
+export const viewport: Viewport = {
+  width: "device-width",
+  initialScale: 1,
+  viewportFit: "cover",
+  themeColor: "#ffffff",
 };
 
 export default function RootLayout({ children }: LayoutProps<"/">) {

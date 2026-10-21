@@ -64,7 +64,7 @@ export async function Marketplace({
             href={listHref}
             aria-current={view === "list" ? "page" : undefined}
             className={cn(
-              "rounded-full px-3 py-1",
+              "inline-flex min-h-11 items-center rounded-full px-4 py-1 md:min-h-0 md:px-3",
               view === "list" ? "bg-neutral-900 text-white" : "text-neutral-700",
             )}
           >
@@ -74,7 +74,7 @@ export async function Marketplace({
             href={mapHref}
             aria-current={view === "map" ? "page" : undefined}
             className={cn(
-              "rounded-full px-3 py-1",
+              "inline-flex min-h-11 items-center rounded-full px-4 py-1 md:min-h-0 md:px-3",
               view === "map" ? "bg-neutral-900 text-white" : "text-neutral-700",
             )}
           >
@@ -105,7 +105,7 @@ function ListResults({
   if (listings.length === 0) {
     return (
       <p className="rounded-2xl border border-neutral-200 p-5 text-sm leading-6 text-neutral-600">
-        No listings match. Widen the distance, clear a filter, or include free lots.
+        No listings match. Widen the distance, try another category, or clear a filter.
       </p>
     );
   }
@@ -139,12 +139,13 @@ function MapResults({
         <ul className="grid gap-2 sm:grid-cols-2">
           {pins.map((pin) => (
             <li key={pin.sellerId} className="rounded-2xl border border-neutral-200 px-3 py-2 text-sm">
-              <Link href={`/shops/${pin.sellerId}`} className="font-semibold hover:underline">
+              <Link href={`/shops/${pin.sellerId}`} className="inline-flex min-h-11 items-center font-semibold hover:underline md:min-h-0">
                 {pin.shopName}
               </Link>
               <p className="text-neutral-500">
                 {pin.count} active {pin.count === 1 ? "listing" : "listings"}
                 {pin.city ? ` · ${pin.city}, ${pin.state}` : ""}
+                {pin.categories.length > 0 ? ` · ${pin.categories.join(", ")}` : ""}
               </p>
             </li>
           ))}

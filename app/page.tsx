@@ -16,12 +16,12 @@ export default function HomePage() {
       <CategoryChips query={query} />
       <div className="mt-4 mb-4 flex items-end justify-between gap-3">
         <div>
-          <h1 className="text-2xl font-bold tracking-tight">Remnant metal nearby</h1>
+          <h1 className="text-2xl font-bold tracking-tight">Scrap and remnant materials nearby</h1>
           <p className="mt-1 max-w-xl text-sm leading-6 text-neutral-500">
-            Leftover bar, plate, tube, and scrap from machine shops. Example cards around San Diego are sample inventory, not live metal.
+            Leftover metal, lumber, construction materials, plastics, glass, and wire from shops and job sites. Example cards around San Diego are sample inventory, not live stock.
           </p>
         </div>
-        <Link href="/browse?zip=92101&miles=50" className="shrink-0 text-sm font-semibold text-primary">
+        <Link href="/browse?zip=92101&miles=50" className="inline-flex min-h-11 shrink-0 items-center text-sm font-semibold text-primary md:min-h-0">
           See all
         </Link>
       </div>
@@ -42,7 +42,7 @@ async function Featured() {
   if (results.length === 0) {
     return (
       <p className="rounded-2xl border border-neutral-200 p-5 text-sm">
-        The board is empty. Be the first shop to list a drop.
+        The board is empty. Be the first to list scrap or remnant material.
       </p>
     );
   }

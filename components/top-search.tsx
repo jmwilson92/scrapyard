@@ -3,7 +3,7 @@
 import { MapPin, Search } from "lucide-react";
 import { usePathname, useSearchParams } from "next/navigation";
 
-const KEPT = ["material", "metal", "form", "thickness", "length", "max", "free", "delivery", "certs", "alloy", "miles", "view"];
+const KEPT = ["category", "type", "material", "metal", "form", "thickness", "length", "max", "free", "delivery", "certs", "alloy", "miles", "view"];
 
 export function TopSearch({ defaultZip = "" }: { defaultZip?: string }) {
   const params = useSearchParams();
@@ -21,7 +21,7 @@ export function TopSearch({ defaultZip = "" }: { defaultZip?: string }) {
         id="q"
         name="q"
         defaultValue={params.get("q") ?? ""}
-        placeholder="Search Skrappily"
+        placeholder="Search scrap and remnants"
         className="h-full min-w-0 flex-1 bg-transparent px-2 text-base outline-none placeholder:text-neutral-400"
       />
       <span className="h-6 w-px shrink-0 bg-neutral-300" aria-hidden />

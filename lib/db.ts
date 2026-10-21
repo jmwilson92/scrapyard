@@ -2,7 +2,7 @@ import fs from "node:fs";
 import path from "node:path";
 import { createClient, type Client, type InStatement } from "@libsql/client";
 import { canonicalForm, inferMetalType, isMetalType } from "@/lib/constants";
-import { seedExampleData } from "@/lib/seed";
+import { backfillNonMetalExamples, seedExampleData } from "@/lib/seed";
 
 export class DatabaseConfigError extends Error {
   constructor(message: string) {
@@ -33,6 +33,8 @@ const SCHEMA: string[] = [
     seller_id TEXT NOT NULL,
     title TEXT NOT NULL,
     material TEXT NOT NULL,
+    category TEXT NOT NULL DEFAULT 'metal',
+    subtype TEXT NOT NULL DEFAULT '',
     metal_type TEXT NOT NULL DEFAULT 'other',
     alloy TEXT NOT NULL,
     form TEXT NOT NULL,
@@ -135,6 +137,14 @@ async function upgradeListingColumns(client: Client): Promise<void> {
       "ALTER TABLE listings ADD COLUMN certs_note TEXT NOT NULL DEFAULT ''",
     );
   }
+  if (!columns.has("category")) {
+    alters.push(
+      "ALTER TABLE listings ADD COLUMN category TEXT NOT NULL DEFAULT 'metal'",
+    );
+  }
+  if (!columns.has("subtype")) {
+    alters.push("ALTER TABLE listings ADD COLUMN subtype TEXT NOT NULL DEFAULT ''");
+  }
   const userColumns = await tableColumns(client, "users");
   if (!userColumns.has("verified_seller")) {
     alters.push(
@@ -158,16 +168,53 @@ async function upgradeListingColumns(client: Client): Promise<void> {
     "CREATE INDEX IF NOT EXISTS listings_certs_status ON listings (certs_available, status)",
   );
 
+  await client.execute(
+    "CREATE INDEX IF NOT EXISTS listings_category_status ON listings (category, status)",
+  );
+
+  if (!(await migrationApplied(client, LISTING_FILTERS_MIGRATION))) {
+    await normalizeListingTaxonomy(client);
+    await markMigration(client, LISTING_FILTERS_MIGRATION);
+  }
+
+  // Existing listings predate non-metal categories: they are all metal.
+  if (!(await migrationApplied(client, LISTING_CATEGORY_MIGRATION))) {
+    await client.batch(
+      [
+        "UPDATE listings SET category = 'metal' WHERE category IS NULL OR category = ''",
+        "UPDATE listings SET subtype = metal_type WHERE category = 'metal' AND (subtype IS NULL OR subtype = '')",
+        "UPDATE listings SET subtype = 'other' WHERE subtype IS NULL OR subtype = ''",
+      ],
+      "write",
+    );
+    await markMigration(client, LISTING_CATEGORY_MIGRATION);
+  }
+
+  if (
+    process.env.SEED_EXAMPLE_DATA !== "false" &&
+    !(await migrationApplied(client, NON_METAL_EXAMPLES_MIGRATION))
+  ) {
+    await backfillNonMetalExamples(client);
+    await markMigration(client, NON_METAL_EXAMPLES_MIGRATION);
+  }
+}
+
+const NON_METAL_EXAMPLES_MIGRATION = "seed-non-metal-examples-v1";
+
+const LISTING_CATEGORY_MIGRATION = "listing-category-v1";
+
+async function migrationApplied(client: Client, id: string): Promise<boolean> {
   const applied = await client.execute({
     sql: "SELECT id FROM schema_migrations WHERE id = ?",
-    args: [LISTING_FILTERS_MIGRATION],
+    args: [id],
   });
-  if (applied.rows[0]) return;
+  return Boolean(applied.rows[0]);
+}
 
-  await normalizeListingTaxonomy(client);
+async function markMigration(client: Client, id: string): Promise<void> {
   await client.execute({
-    sql: "INSERT INTO schema_migrations (id) VALUES (?)",
-    args: [LISTING_FILTERS_MIGRATION],
+    sql: "INSERT OR IGNORE INTO schema_migrations (id) VALUES (?)",
+    args: [id],
   });
 }
 

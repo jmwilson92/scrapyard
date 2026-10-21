@@ -9,7 +9,7 @@ import { MessageForm } from "@/components/message-form";
 import { Shell } from "@/components/shell";
 import { VerifiedSellerBadge } from "@/components/verified-seller";
 import { Button } from "@/components/ui/button";
-import { REPORT_REASONS, formLabel, metalTypeLabel } from "@/lib/constants";
+import { REPORT_REASONS, categoryLabel, formLabel, subtypeLabel } from "@/lib/constants";
 import {
   formatDelivery,
   formatDimensions,
@@ -96,7 +96,12 @@ async function ListingDetail({
             {delivers ? "Seller can deliver" : "Buyer pickup only"}
           </span>
           <span className="rounded-full bg-neutral-100 px-2.5 py-1 text-neutral-800">
-            {metalTypeLabel(listing.metalType)}
+            {categoryLabel(listing.category)}
+          </span>
+          <span className="rounded-full bg-neutral-100 px-2.5 py-1 text-neutral-800">
+            {listing.category === "metal"
+              ? subtypeLabel("metal", listing.metalType)
+              : subtypeLabel(listing.category, listing.subtype)}
           </span>
           <span className="rounded-full bg-neutral-100 px-2.5 py-1 text-neutral-800">
             {formLabel(listing.form)}
@@ -107,7 +112,7 @@ async function ListingDetail({
           {listing.status === "sold" ? (
             <span className="rounded-full bg-neutral-900 px-2.5 py-1 text-white">Sold</span>
           ) : null}
-          {listing.certsAvailable ? (
+          {listing.category === "metal" && listing.certsAvailable ? (
             <span className="rounded-full bg-neutral-900 px-2.5 py-1 text-white">Certs</span>
           ) : null}
         </div>
@@ -125,16 +130,21 @@ async function ListingDetail({
           <Fact label="Size" value={formatDimensions(listing) || "Not listed"} />
           <Fact label="Quantity" value={formatQuantity(listing.quantity)} />
           <Fact label="Weight" value={weight ?? "Not listed"} />
-          <Fact label="Grade" value={listing.alloy} />
-          <Fact label="Getting it" value={formatDelivery(listing)} />
           <Fact
-            label="Certs"
-            value={
-              listing.certsAvailable
-                ? listing.certsNote || "Mill test report or certificate of conformance available"
-                : "Not offered"
-            }
+            label={listing.category === "metal" ? "Grade" : "Spec"}
+            value={listing.alloy || "Not listed"}
           />
+          <Fact label="Getting it" value={formatDelivery(listing)} />
+          {listing.category === "metal" ? (
+            <Fact
+              label="Certs"
+              value={
+                listing.certsAvailable
+                  ? listing.certsNote || "Mill test report or certificate of conformance available"
+                  : "Not offered"
+              }
+            />
+          ) : null}
         </dl>
         <p className="flex flex-wrap items-center gap-2 text-sm">
           <span>

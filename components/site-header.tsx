@@ -1,6 +1,7 @@
 import Link from "next/link";
 import { Suspense } from "react";
 import { logoutAction } from "@/app/actions/auth";
+import { MobileMenu } from "@/components/mobile-menu";
 import { TopSearch } from "@/components/top-search";
 import { countUnread } from "@/lib/repo";
 import { getRequestDb, isDatabaseConfigError } from "@/lib/server-db";
@@ -17,18 +18,18 @@ export function SiteHeader() {
         >
           Skrap<span className="text-primary">pily</span>
         </Link>
-        <div className="order-3 w-full min-w-0 flex-1 lg:order-none">
+        <div className="order-3 w-full min-w-0 flex-1 basis-full lg:order-none lg:basis-0">
           <Suspense fallback={<div className="h-12 rounded-full border-2 border-neutral-200" />}>
             <HeaderSearch />
           </Suspense>
         </div>
-        <nav className="ml-auto flex flex-wrap items-center gap-x-3 gap-y-2 text-sm font-semibold">
+        <MobileMenu>
           <HeaderLink href="/browse">Browse</HeaderLink>
           <HeaderLink href="/map">Map</HeaderLink>
-          <Suspense fallback={<span className="text-neutral-400">Account</span>}>
+          <Suspense fallback={<span className="inline-flex min-h-11 items-center px-2 text-neutral-400 md:min-h-0 md:px-1">Account</span>}>
             <AccountLinks />
           </Suspense>
-        </nav>
+        </MobileMenu>
       </div>
     </header>
   );
@@ -84,7 +85,7 @@ function AccountNav({
       <>
         <Link
           href="/login?next=/listings/new"
-          className="rounded-full bg-primary px-3 py-1.5 text-white hover:bg-primary/90"
+          className="inline-flex min-h-11 items-center justify-center rounded-full bg-primary px-3 py-1.5 text-white hover:bg-primary/90 md:min-h-0"
         >
           Sell
         </Link>
@@ -97,7 +98,7 @@ function AccountNav({
     <>
       <Link
         href="/listings/new"
-        className="rounded-full bg-primary px-3 py-1.5 text-white hover:bg-primary/90"
+        className="inline-flex min-h-11 items-center justify-center rounded-full bg-primary px-3 py-1.5 text-white hover:bg-primary/90 md:min-h-0"
       >
         Sell
       </Link>
@@ -113,7 +114,7 @@ function AccountNav({
       <form action={logoutAction}>
         <button
           type="submit"
-          className="rounded-md px-1 py-1 text-neutral-500 hover:text-neutral-900 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring"
+          className="min-h-11 w-full rounded-md px-2 py-1 text-left text-neutral-500 md:min-h-0 md:w-auto md:px-1 hover:text-neutral-900 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring"
         >
           Sign out
         </button>
@@ -132,7 +133,7 @@ function HeaderLink({
   return (
     <Link
       href={href}
-      className="inline-flex items-center rounded-md px-1 py-1 text-neutral-700 hover:text-neutral-950 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring"
+      className="inline-flex min-h-11 items-center rounded-md px-2 py-1 text-neutral-700 md:min-h-0 md:px-1 hover:text-neutral-950 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring"
     >
       {children}
     </Link>

@@ -1,5 +1,9 @@
 import {
   canonicalForm,
+  defaultSubtype,
+  isCategory,
+  isSubtypeFor,
+  type Category,
   inferMetalType,
   isMaterial,
   isMetalType,
@@ -29,10 +33,24 @@ export function parseListingForm(
   const metalRaw = text(raw.metalType).trim().toLowerCase();
   const form = canonicalForm(text(raw.form));
   const zip = normalizeZip(text(raw.zip));
-  const metal = resolveMetal(metalRaw, materialRaw, alloy, errors);
+  const categoryRaw = text(raw.category).trim().toLowerCase();
+  const subtypeRaw = text(raw.subtype).trim().toLowerCase();
+  let category: Category = "metal";
+  if (!categoryRaw) category = "metal";
+  else if (isCategory(categoryRaw)) category = categoryRaw;
+  else errors.category = "Choose a category.";
+  const isMetal = category === "metal";
+  const metal = isMetal
+    ? resolveMetal(metalRaw, materialRaw, alloy, errors)
+    : { metalType: "other" as MetalType, material: "other" as Material };
+  let subtype = isMetal ? (metal?.metalType ?? "other") : defaultSubtype(category);
+  if (!isMetal && subtypeRaw) {
+    if (isSubtypeFor(category, subtypeRaw)) subtype = subtypeRaw;
+    else errors.subtype = "Choose a type.";
+  }
 
-  if (title.length < 3) errors.title = "Give the drop a short title.";
-  if (alloy.length < 1) errors.alloy = "Add an alloy or grade.";
+  if (title.length < 3) errors.title = "Give the listing a short title.";
+  if (isMetal && alloy.length < 1) errors.alloy = "Add an alloy or grade.";
   if (!form) errors.form = "Choose a form.";
 
   const lengthIn = optionalInches(text(raw.lengthIn), "Length", errors, "lengthIn");
@@ -50,6 +68,7 @@ export function parseListingForm(
     "diameterIn",
   );
   if (
+    isMetal &&
     !errors.lengthIn &&
     !errors.widthIn &&
     !errors.thicknessIn &&
@@ -66,7 +85,9 @@ export function parseListingForm(
   const weightLbs = optionalWeight(text(raw.weightLbs), errors);
   const priceCents = parsePrice(text(raw.price), text(raw.isFree) === "on", errors);
   const delivery = parseDelivery(raw, errors);
-  const certs = parseCerts(raw, errors);
+  const certs = isMetal
+    ? parseCerts(raw, errors)
+    : { available: false, note: "" };
 
   if (zip.length !== 5) {
     errors.zip = "Enter a 5-digit pickup ZIP code.";
@@ -82,6 +103,8 @@ export function parseListingForm(
     ok: true,
     value: {
       title,
+      category,
+      subtype,
       material: metal.material,
       metalType: metal.metalType,
       alloy,

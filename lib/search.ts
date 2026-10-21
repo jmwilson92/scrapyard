@@ -1,5 +1,9 @@
 import {
   canonicalForm,
+  categoryLabel,
+  isCategory,
+  isSubtypeFor,
+  subtypeLabel,
   formLabel,
   isMaterial,
   isMetalType,
@@ -15,6 +19,8 @@ import { normalizeZip } from "@/lib/zip";
 
 export type SearchableListing = {
   id: string;
+  category?: string;
+  subtype?: string;
   material: string;
   metalType?: string;
   alloy: string;
@@ -40,6 +46,8 @@ export type SearchHit<T extends SearchableListing> = T & {
 
 export type SearchQuery = {
   q?: string;
+  category?: string;
+  subtype?: string;
   material?: string;
   metalType?: string;
   alloy?: string;
@@ -64,6 +72,9 @@ type QueryInput = Record<string, string | string[] | undefined>;
 export function parseSearchQuery(input: QueryInput): SearchQuery {
   const q = first(input.q).trim().slice(0, 80);
   const material = first(input.material).trim().toLowerCase();
+  const categoryRaw = first(input.category).trim().toLowerCase();
+  const category = isCategory(categoryRaw) ? categoryRaw : undefined;
+  const subtypeRaw = first(input.type).trim().toLowerCase();
   const metal = first(input.metal).trim().toLowerCase();
   const form = canonicalForm(first(input.form).trim().toLowerCase());
   const alloy = first(input.alloy).trim().slice(0, 40);
@@ -97,6 +108,11 @@ export function parseSearchQuery(input: QueryInput): SearchQuery {
 
   return {
     q: q || undefined,
+    category,
+    subtype:
+      category && category !== "metal" && isSubtypeFor(category, subtypeRaw)
+        ? subtypeRaw
+        : undefined,
     material: isMaterial(material) ? material : undefined,
     metalType: isMetalType(metal) ? metal : undefined,
     alloy: alloy || undefined,
@@ -135,8 +151,16 @@ export function searchListings<T extends SearchableListing>(
 
   for (const listing of listings) {
     if (!query.includeSold && listing.status !== "active") continue;
+    const listingCategory = listing.category ?? "metal";
+    if (query.category && listingCategory !== query.category) continue;
+    if (query.subtype && listing.subtype !== query.subtype) continue;
     if (query.material && listing.material !== query.material) continue;
-    if (query.metalType && listing.metalType !== query.metalType) continue;
+    if (
+      query.metalType &&
+      (listingCategory !== "metal" || listing.metalType !== query.metalType)
+    ) {
+      continue;
+    }
     if (query.form && canonicalForm(listing.form) !== query.form) continue;
     if (alloy && !listing.alloy.toLowerCase().includes(alloy)) continue;
     if (keywords.length > 0 && !matchesKeywords(listing, keywords)) continue;
@@ -189,6 +213,8 @@ export function searchListings<T extends SearchableListing>(
 export function toSearchParams(
   query: SearchQuery,
   patch: {
+    category?: string | null;
+    subtype?: string | null;
     material?: string | null;
     metalType?: string | null;
     form?: string | null;
@@ -199,6 +225,10 @@ export function toSearchParams(
   const material = patch.material === null ? undefined : (patch.material ?? query.material);
   const metalType =
     patch.metalType === null ? undefined : (patch.metalType ?? query.metalType);
+  const category =
+    patch.category === null ? undefined : (patch.category ?? query.category);
+  const subtype =
+    patch.subtype === null ? undefined : (patch.subtype ?? query.subtype);
   const form = patch.form === null ? undefined : (patch.form ?? query.form);
 
   if (query.q) params.set("q", query.q);
@@ -209,6 +239,8 @@ export function toSearchParams(
       query.maxDistanceMiles == null ? "any" : String(query.maxDistanceMiles),
     );
   }
+  if (category) params.set("category", category);
+  if (subtype) params.set("type", subtype);
   if (material) params.set("material", material);
   if (metalType) params.set("metal", metalType);
   if (form) params.set("form", form);
@@ -231,6 +263,8 @@ function matchesKeywords(listing: SearchableListing, keywords: string[]): boolea
     listing.alloy,
     listing.notes,
     listing.shopName,
+    categoryLabel(listing.category ?? "metal"),
+    listing.subtype ? subtypeLabel(listing.category ?? "metal", listing.subtype) : "",
     listing.material,
     materialLabel(listing.material),
     listing.metalType,

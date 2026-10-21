@@ -1,7 +1,10 @@
-import type { DeliveryMode, Material, MetalType, StockForm } from "@/lib/constants";
+import type { Category, DeliveryMode, Material, MetalType, StockForm } from "@/lib/constants";
 
 export type ListingInput = {
   title: string;
+  category: Category;
+  /** Metal: same as metalType. Other categories: a SUBTYPES value. */
+  subtype: string;
   material: Material;
   metalType: MetalType;
   alloy: string;

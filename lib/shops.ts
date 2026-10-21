@@ -1,3 +1,5 @@
+import { categoryLabel } from "@/lib/constants";
+
 export type ShopPin = {
   sellerId: string;
   shopName: string;
@@ -7,6 +9,8 @@ export type ShopPin = {
   lat: number;
   lng: number;
   count: number;
+  /** Category labels this shop has active listings in. */
+  categories: string[];
 };
 
 type PinListing = {
@@ -15,6 +19,7 @@ type PinListing = {
   zip: string;
   shopZip?: string;
   status: string;
+  category?: string;
 };
 
 type PinPoint = {
@@ -32,21 +37,24 @@ export function buildShopPins(
 ): ShopPin[] {
   const grouped = new Map<
     string,
-    { shopName: string; zip: string; count: number }
+    { shopName: string; zip: string; count: number; categories: Set<string> }
   >();
 
   for (const listing of listings) {
     if (listing.status !== "active") continue;
     const zip = listing.shopZip || listing.zip;
     const current = grouped.get(listing.sellerId);
+    const category = categoryLabel(listing.category ?? "metal");
     if (current) {
       current.count += 1;
+      current.categories.add(category);
       continue;
     }
     grouped.set(listing.sellerId, {
       shopName: listing.shopName,
       zip,
       count: 1,
+      categories: new Set([category]),
     });
   }
 
@@ -63,6 +71,7 @@ export function buildShopPins(
       lat: point.lat,
       lng: point.lng,
       count: shop.count,
+      categories: [...shop.categories],
     });
   }
 
