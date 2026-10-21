@@ -1,4 +1,5 @@
 import Link from "next/link";
+import { businessTypeLabel } from "@/lib/business";
 import { notFound } from "next/navigation";
 import { Suspense } from "react";
 import { deleteListingAction, setListingStatusAction } from "@/app/actions/listings";
@@ -14,7 +15,7 @@ import {
   formatDelivery,
   formatDimensions,
   formatDistance,
-  formatMoney,
+  formatListingPrice,
   formatQuantity,
   formatWeight,
 } from "@/lib/format";
@@ -69,6 +70,7 @@ async function ListingDetail({
   const owner = user?.id === listing.sellerId;
   const weight = formatWeight(listing.weightLbs);
   const delivers = listing.deliveryMode === "delivery";
+  const wanted = listing.listingType === "wanted";
 
   return (
     <article className="grid gap-6 lg:grid-cols-2">
@@ -79,7 +81,14 @@ async function ListingDetail({
             Browse
           </Link>
         </p>
-        <p className="text-3xl font-bold tracking-tight">{formatMoney(listing.priceCents)}</p>
+        {wanted ? (
+          <p>
+            <span className="rounded-full bg-copper px-2.5 py-1 text-xs font-semibold text-white">
+              Wanted · request for material
+            </span>
+          </p>
+        ) : null}
+        <p className="text-3xl font-bold tracking-tight">{formatListingPrice(listing)}</p>
         <h1 className="text-xl font-semibold leading-7">{listing.title}</h1>
         <p className="text-sm text-neutral-500">
           {pickup ? `${pickup.city}, ${pickup.state} ${listing.zip}` : listing.zip}
@@ -148,10 +157,13 @@ async function ListingDetail({
         </dl>
         <p className="flex flex-wrap items-center gap-2 text-sm">
           <span>
-            Sold by{" "}
+            {wanted ? "Requested by" : "Sold by"}{" "}
             <Link href={`/shops/${listing.sellerId}`} className="font-semibold text-primary hover:underline">
               {listing.shopName}
             </Link>
+            {listing.businessType ? (
+              <span className="text-neutral-500"> · {businessTypeLabel(listing.businessType)}</span>
+            ) : null}
           </span>
           {listing.sellerVerified ? <VerifiedSellerBadge /> : null}
         </p>
@@ -173,6 +185,14 @@ async function ListingDetail({
 
         {owner ? (
           <OwnerPanel id={listing.id} status={listing.status} />
+        ) : user && !user.profileComplete ? (
+          <p className="rounded-2xl border border-neutral-200 p-4 text-sm leading-6">
+            Messaging is for verified business profiles.{" "}
+            <Link href="/account?complete=1" className="font-semibold text-primary">
+              Finish your company profile
+            </Link>{" "}
+            to contact this business.
+          </p>
         ) : user ? (
           <div className="rounded-2xl border border-neutral-200 p-4">
             <MessageForm listingId={listing.id} />
@@ -183,7 +203,7 @@ async function ListingDetail({
             render={<Link href={`/login?next=/listings/${listing.id}`} />}
             className="h-11 rounded-full px-4 text-base"
           >
-            Sign in to message the seller
+            {wanted ? "Sign in to offer material" : "Sign in to message the seller"}
           </Button>
         )}
 

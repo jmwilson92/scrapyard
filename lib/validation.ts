@@ -14,6 +14,7 @@ import {
   type MetalType,
   type ReportReason,
 } from "@/lib/constants";
+import { isListingType, type ListingType } from "@/lib/business";
 import type { ListingInput } from "@/lib/types";
 import { normalizeZip } from "@/lib/zip";
 
@@ -26,6 +27,13 @@ export function parseListingForm(
   zipExists: (zip: string) => boolean,
 ): { ok: true; value: ListingInput } | { ok: false; errors: FieldErrors } {
   const errors: FieldErrors = {};
+  const listingTypeRaw = text(raw.listingType).trim().toLowerCase();
+  let listingType: ListingType = "offer";
+  if (listingTypeRaw) {
+    if (isListingType(listingTypeRaw)) listingType = listingTypeRaw;
+    else errors.listingType = "Choose offering or wanted.";
+  }
+  const isWanted = listingType === "wanted";
   const title = cleanText(text(raw.title), 80);
   const alloy = cleanText(text(raw.alloy), 40);
   const notes = text(raw.notes).trim().slice(0, 1000);
@@ -83,7 +91,12 @@ export function parseListingForm(
 
   const quantity = parseQuantity(text(raw.quantity), errors);
   const weightLbs = optionalWeight(text(raw.weightLbs), errors);
-  const priceCents = parsePrice(text(raw.price), text(raw.isFree) === "on", errors);
+  // Wanted posts: price is an optional target budget; blank means open to quotes.
+  const priceCents = parsePrice(
+    text(raw.price),
+    isWanted ? !text(raw.price).trim() : text(raw.isFree) === "on",
+    errors,
+  );
   const delivery = parseDelivery(raw, errors);
   const certs = isMetal
     ? parseCerts(raw, errors)
@@ -102,6 +115,7 @@ export function parseListingForm(
   return {
     ok: true,
     value: {
+      listingType,
       title,
       category,
       subtype,

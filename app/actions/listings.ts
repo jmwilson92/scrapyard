@@ -18,6 +18,7 @@ import { parseListingForm } from "@/lib/validation";
 import { lookupZip } from "@/lib/zip";
 
 const LISTING_FIELDS = [
+  "listingType",
   "title",
   "category",
   "subtype",
@@ -49,7 +50,14 @@ export async function createListingAction(
   const values = readValues(formData, LISTING_FIELDS);
   const user = await getCurrentUser();
   if (!user) {
-    return { errors: {}, values, formError: "Sign in before listing a drop." };
+    return { errors: {}, values, formError: "Sign in with your business account before posting." };
+  }
+  if (!user.profileComplete) {
+    return {
+      errors: {},
+      values,
+      formError: "Finish your company profile (business type, city, state, and contact) before posting.",
+    };
   }
 
   const raw: Record<string, FormDataEntryValue | string | undefined> = {};

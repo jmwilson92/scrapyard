@@ -1,3 +1,4 @@
+import type { BusinessType } from "@/lib/business";
 import type { Category, DeliveryMode, Material, MetalType, StockForm } from "@/lib/constants";
 
 export const DEMO_PASSWORD = "skrappily-demo";
@@ -655,3 +656,25 @@ export const SEED_LISTINGS: SeedListing[] = [
   ...LISTING_ROWS.map(finish),
   ...NON_METAL_SEED_LISTINGS,
 ];
+
+/** Business profile details for the seeded example companies. */
+export const EXAMPLE_BUSINESS_TYPES: Record<string, BusinessType> = {
+  "shop-kearny": "machine-shop",
+  "shop-mira": "machine-shop",
+  "shop-harbor": "distributor",
+  "shop-marine": "fabricator",
+  "shop-elcajon": "machine-shop",
+  "shop-santee": "fabricator",
+  "shop-oceanside": "distributor",
+  "shop-carlsbad": "manufacturer",
+  "shop-escondido": "recycler",
+  "shop-sorrento": "manufacturer",
+  "shop-lemon": "fabricator",
+  "shop-vista": "fabricator",
+  "shop-barrio": "recycler",
+  "shop-oldtown": "machine-shop",
+};
+
+export function exampleCompanyId(userId: string): string {
+  return `co-${userId}`;
+}

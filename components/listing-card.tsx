@@ -2,7 +2,7 @@ import Link from "next/link";
 import { ListingPhoto } from "@/components/listing-photo";
 import { VerifiedSellerBadge } from "@/components/verified-seller";
 import { categoryLabel, subtypeLabel } from "@/lib/constants";
-import { formatDelivery, formatDistance, formatMoney } from "@/lib/format";
+import { formatDelivery, formatDistance, formatListingPrice } from "@/lib/format";
 import type { Listing } from "@/lib/types";
 import { lookupZip } from "@/lib/zip";
 
@@ -28,6 +28,11 @@ export function ListingCard({
       <div className="relative">
         <ListingPhoto src={listing.photoUrl} alt="" className="rounded-2xl" />
         <div className="absolute top-2 left-2 flex flex-wrap gap-1">
+          {listing.listingType === "wanted" ? (
+            <span className="rounded-full bg-copper px-2 py-0.5 text-xs font-semibold text-white">
+              Wanted
+            </span>
+          ) : null}
           {listing.isExample ? (
             <span className="rounded-full bg-white/95 px-2 py-0.5 text-xs font-semibold text-neutral-800">
               Example
@@ -56,7 +61,7 @@ export function ListingCard({
       </div>
       <div className="px-0.5 pt-2">
         <div className="flex items-baseline justify-between gap-2">
-          <p className="text-lg font-bold tracking-tight">{formatMoney(listing.priceCents)}</p>
+          <p className="text-lg font-bold tracking-tight">{formatListingPrice(listing)}</p>
           {distance ? <p className="text-sm text-neutral-500">{distance}</p> : null}
         </div>
         <h2 className="mt-0.5 line-clamp-2 text-sm leading-5 text-neutral-800 group-hover:underline">
@@ -69,7 +74,7 @@ export function ListingCard({
         </p>
         <p className="mt-0.5 text-xs text-neutral-500">
           {where}
-          {listing.priceCents != null ? " · lot" : ""}
+          {listing.priceCents != null && listing.listingType !== "wanted" ? " · lot" : ""}
         </p>
         {listing.sellerVerified ? (
           <p className="mt-1">

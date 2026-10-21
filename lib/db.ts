@@ -2,7 +2,7 @@ import fs from "node:fs";
 import path from "node:path";
 import { createClient, type Client, type InStatement } from "@libsql/client";
 import { canonicalForm, inferMetalType, isMetalType } from "@/lib/constants";
-import { backfillNonMetalExamples, seedExampleData } from "@/lib/seed";
+import { backfillNonMetalExamples, ensureCompanies, seedExampleData } from "@/lib/seed";
 
 export class DatabaseConfigError extends Error {
   constructor(message: string) {
@@ -20,6 +20,23 @@ const SCHEMA: string[] = [
     zip TEXT NOT NULL,
     is_example INTEGER NOT NULL DEFAULT 0,
     verified_seller INTEGER NOT NULL DEFAULT 0,
+    created_at INTEGER NOT NULL
+  )`,
+  `CREATE TABLE IF NOT EXISTS companies (
+    id TEXT PRIMARY KEY,
+    name TEXT NOT NULL,
+    business_type TEXT NOT NULL DEFAULT '',
+    street TEXT NOT NULL DEFAULT '',
+    city TEXT NOT NULL DEFAULT '',
+    state TEXT NOT NULL DEFAULT '',
+    zip TEXT NOT NULL,
+    service_radius_miles REAL,
+    ein TEXT NOT NULL DEFAULT '',
+    website TEXT NOT NULL DEFAULT '',
+    contact_name TEXT NOT NULL DEFAULT '',
+    contact_phone TEXT NOT NULL DEFAULT '',
+    is_example INTEGER NOT NULL DEFAULT 0,
+    verified INTEGER NOT NULL DEFAULT 0,
     created_at INTEGER NOT NULL
   )`,
   `CREATE TABLE IF NOT EXISTS sessions (
@@ -146,6 +163,17 @@ async function upgradeListingColumns(client: Client): Promise<void> {
     alters.push("ALTER TABLE listings ADD COLUMN subtype TEXT NOT NULL DEFAULT ''");
   }
   const userColumns = await tableColumns(client, "users");
+  if (!userColumns.has("company_id")) {
+    alters.push("ALTER TABLE users ADD COLUMN company_id TEXT");
+  }
+  if (!columns.has("company_id")) {
+    alters.push("ALTER TABLE listings ADD COLUMN company_id TEXT");
+  }
+  if (!columns.has("listing_type")) {
+    alters.push(
+      "ALTER TABLE listings ADD COLUMN listing_type TEXT NOT NULL DEFAULT 'offer'",
+    );
+  }
   if (!userColumns.has("verified_seller")) {
     alters.push(
       "ALTER TABLE users ADD COLUMN verified_seller INTEGER NOT NULL DEFAULT 0",
@@ -172,6 +200,14 @@ async function upgradeListingColumns(client: Client): Promise<void> {
     "CREATE INDEX IF NOT EXISTS listings_category_status ON listings (category, status)",
   );
 
+  await client.execute(
+    "CREATE INDEX IF NOT EXISTS listings_company ON listings (company_id, created_at)",
+  );
+  await client.execute(
+    "CREATE INDEX IF NOT EXISTS listings_type_status ON listings (listing_type, status)",
+  );
+  await client.execute("CREATE INDEX IF NOT EXISTS users_company ON users (company_id)");
+
   if (!(await migrationApplied(client, LISTING_FILTERS_MIGRATION))) {
     await normalizeListingTaxonomy(client);
     await markMigration(client, LISTING_FILTERS_MIGRATION);
@@ -197,6 +233,10 @@ async function upgradeListingColumns(client: Client): Promise<void> {
     await backfillNonMetalExamples(client);
     await markMigration(client, NON_METAL_EXAMPLES_MIGRATION);
   }
+
+  // B2B: every account belongs to a company, and every listing to that company.
+  // Idempotent: only touches users/listings without a company yet.
+  await ensureCompanies(client);
 }
 
 const NON_METAL_EXAMPLES_MIGRATION = "seed-non-metal-examples-v1";
@@ -262,6 +302,7 @@ export async function seedIfEmpty(client: Client): Promise<void> {
     }
     await seedExampleData(tx);
     await tx.commit();
+    await ensureCompanies(client);
   } catch (error) {
     await tx.rollback();
     throw error;

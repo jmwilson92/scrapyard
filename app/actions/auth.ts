@@ -1,43 +1,70 @@
 "use server";
 
+import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
 import { DatabaseConfigError } from "@/lib/db";
 import { emptyFormState, readValues, type FormState } from "@/lib/form-state";
 import { hashPassword, verifyPassword } from "@/lib/passwords";
 import { safeNextPath } from "@/lib/paths";
-import { findUserByEmail, insertUser, updateUserShop } from "@/lib/repo";
+import { parseCompanyInput } from "@/lib/business";
+import {
+  attachUserToCompany,
+  findUserByEmail,
+  insertCompany,
+  insertUser,
+  updateCompany,
+} from "@/lib/repo";
 import { getRequestDb } from "@/lib/server-db";
 import { endSession, getCurrentUser, startSession } from "@/lib/session";
 import {
   parseLoginInput,
   parseRegisterInput,
-  parseShopUpdate,
 } from "@/lib/validation";
 import { lookupZip } from "@/lib/zip";
 
-const REGISTER_FIELDS = ["shopName", "email", "zip"];
+const COMPANY_FIELDS = [
+  "companyName",
+  "businessType",
+  "street",
+  "city",
+  "state",
+  "zip",
+  "serviceRadius",
+  "ein",
+  "website",
+  "contactName",
+  "contactPhone",
+];
+const REGISTER_FIELDS = [...COMPANY_FIELDS, "email"];
 const LOGIN_FIELDS = ["email"];
-const SHOP_FIELDS = ["shopName", "zip"];
 
 export async function registerAction(
   _prev: FormState,
   formData: FormData,
 ): Promise<FormState> {
   const values = readValues(formData, REGISTER_FIELDS);
-  const parsed = parseRegisterInput(
+  const credentials = parseRegisterInput(
     {
-      shopName: values.shopName ?? "",
+      shopName: values.companyName ?? "",
       email: values.email ?? "",
       password: stringField(formData, "password"),
       zip: values.zip ?? "",
     },
     (zip) => lookupZip(zip) != null,
   );
-  if (!parsed.ok) return { errors: parsed.errors, values };
+  const company = parseCompanyInput(values, (zip) => lookupZip(zip) != null);
+  if (!credentials.ok || !company.ok) {
+    const errors = {
+      ...(credentials.ok ? {} : credentials.errors),
+      ...(company.ok ? {} : company.errors),
+    };
+    delete errors.shopName;
+    return { errors, values };
+  }
 
   try {
     const db = await getRequestDb();
-    const existing = await findUserByEmail(db, parsed.value.email);
+    const existing = await findUserByEmail(db, credentials.value.email);
     if (existing) {
       return {
         errors: { email: "An account with that email already exists." },
@@ -45,13 +72,16 @@ export async function registerAction(
       };
     }
     const id = crypto.randomUUID();
+    const companyId = crypto.randomUUID();
+    await insertCompany(db, { ...company.value, id: companyId });
     await insertUser(db, {
       id,
-      email: parsed.value.email,
-      passwordHash: await hashPassword(parsed.value.password),
-      shopName: parsed.value.shopName,
-      zip: parsed.value.zip,
+      email: credentials.value.email,
+      passwordHash: await hashPassword(credentials.value.password),
+      shopName: company.value.name,
+      zip: company.value.zip,
     });
+    await attachUserToCompany(db, id, companyId);
     await startSession(id);
   } catch (error) {
     if (error instanceof DatabaseConfigError) {
@@ -103,24 +133,28 @@ export async function logoutAction(): Promise<void> {
   redirect("/");
 }
 
-export async function updateShopAction(
+export async function updateCompanyAction(
   _prev: FormState,
   formData: FormData,
 ): Promise<FormState> {
-  const values = readValues(formData, SHOP_FIELDS);
+  const values = readValues(formData, COMPANY_FIELDS);
   const user = await getCurrentUser();
   if (!user) {
-    return { ...emptyFormState, values, formError: "Sign in to update the shop." };
+    return { ...emptyFormState, values, formError: "Sign in to update your company." };
   }
-  const parsed = parseShopUpdate(
-    { shopName: values.shopName ?? "", zip: values.zip ?? "" },
-    (zip) => lookupZip(zip) != null,
-  );
+  const parsed = parseCompanyInput(values, (zip) => lookupZip(zip) != null);
   if (!parsed.ok) return { errors: parsed.errors, values };
 
   try {
     const db = await getRequestDb();
-    await updateUserShop(db, user.id, parsed.value.shopName, parsed.value.zip);
+    let companyId = user.companyId;
+    if (!companyId) {
+      companyId = crypto.randomUUID();
+      await insertCompany(db, { ...parsed.value, id: companyId, isExample: user.isExample });
+      await attachUserToCompany(db, user.id, companyId);
+    } else {
+      await updateCompany(db, companyId, parsed.value);
+    }
   } catch (error) {
     if (error instanceof DatabaseConfigError) {
       return { errors: {}, values, formError: error.message };
@@ -128,10 +162,12 @@ export async function updateShopAction(
     throw error;
   }
 
+  revalidatePath("/account");
+  revalidatePath(`/shops/${user.id}`);
   return {
     errors: {},
     values,
-    success: "Shop details saved.",
+    success: "Company profile saved.",
   };
 }
 
