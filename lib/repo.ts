@@ -437,15 +437,18 @@ export async function listMessagesForUser(
 ): Promise<MessageRow[]> {
   const result = await db.execute({
     sql: `SELECT
-        m.id, m.listing_id, l.title AS listing_title,
+        m.id, m.listing_id, m.rfq_id,
+        COALESCE(l.title, r.title, 'Conversation') AS listing_title,
         m.sender_id, su.shop_name AS sender_shop,
         m.recipient_id, ru.shop_name AS recipient_shop,
         m.body, m.created_at, m.read_at
       FROM messages m
-      JOIN listings l ON l.id = m.listing_id
+      LEFT JOIN listings l ON l.id = m.listing_id AND m.listing_id != ''
+      LEFT JOIN rfqs r ON r.id = m.rfq_id AND m.rfq_id != ''
       JOIN users su ON su.id = m.sender_id
       JOIN users ru ON ru.id = m.recipient_id
-      WHERE m.sender_id = ? OR m.recipient_id = ?
+      WHERE (m.sender_id = ? OR m.recipient_id = ?)
+        AND (l.id IS NOT NULL OR r.id IS NOT NULL)
       ORDER BY m.created_at ASC`,
     args: [userId, userId],
   });
@@ -581,6 +584,7 @@ function mapMessage(row: Record<string, unknown>): MessageRow {
   return {
     id: text(row.id),
     listingId: text(row.listing_id),
+    rfqId: row.rfq_id ? text(row.rfq_id) : undefined,
     listingTitle: text(row.listing_title),
     senderId: text(row.sender_id),
     senderShop: text(row.sender_shop),

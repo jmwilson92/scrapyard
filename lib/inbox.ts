@@ -10,12 +10,13 @@ export function groupInboxThreads(
   for (const row of ordered) {
     if (row.senderId !== userId && row.recipientId !== userId) continue;
     const otherUserId = row.senderId === userId ? row.recipientId : row.senderId;
-    const key = `${row.listingId}:${otherUserId}`;
+    const key = row.rfqId ? `rfq:${row.rfqId}:${otherUserId}` : `${row.listingId}:${otherUserId}`;
     const unread = row.recipientId === userId && row.readAt == null ? 1 : 0;
     const existing = threads.get(key);
     if (!existing) {
       threads.set(key, {
         listingId: row.listingId,
+        rfqId: row.rfqId || undefined,
         listingTitle: row.listingTitle,
         otherUserId,
         otherShopName:
@@ -32,4 +33,10 @@ export function groupInboxThreads(
   }
 
   return [...threads.values()].sort((a, b) => b.lastAt - a.lastAt);
+}
+
+export function threadHref(thread: { listingId: string; rfqId?: string; otherUserId: string }): string {
+  return thread.rfqId
+    ? `/inbox/rfq/${thread.rfqId}/${thread.otherUserId}`
+    : `/inbox/${thread.listingId}/${thread.otherUserId}`;
 }

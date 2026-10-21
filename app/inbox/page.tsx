@@ -4,7 +4,7 @@ import { Suspense } from "react";
 import { DatabaseSetup } from "@/components/database-setup";
 import { Shell } from "@/components/shell";
 import { formatWhen } from "@/lib/format";
-import { groupInboxThreads } from "@/lib/inbox";
+import { groupInboxThreads, threadHref } from "@/lib/inbox";
 import { listMessagesForUser } from "@/lib/repo";
 import { loadRequestDb } from "@/lib/server-db";
 import { getCurrentUser } from "@/lib/session";
@@ -50,9 +50,9 @@ async function InboxList() {
   return (
     <ul className="grid gap-3">
       {threads.map((thread) => (
-        <li key={`${thread.listingId}:${thread.otherUserId}`}>
+        <li key={`${thread.rfqId ?? thread.listingId}:${thread.otherUserId}`}>
           <Link
-            href={`/inbox/${thread.listingId}/${thread.otherUserId}`}
+            href={threadHref(thread)}
             className="block rounded-xl bg-card p-4 ring-1 ring-foreground/10 hover:ring-copper"
           >
             <div className="flex items-baseline justify-between gap-3">

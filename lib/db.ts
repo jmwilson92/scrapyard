@@ -2,7 +2,7 @@ import fs from "node:fs";
 import path from "node:path";
 import { createClient, type Client, type InStatement } from "@libsql/client";
 import { canonicalForm, inferMetalType, isMetalType } from "@/lib/constants";
-import { backfillNonMetalExamples, ensureCompanies, seedExampleData } from "@/lib/seed";
+import { backfillNonMetalExamples, ensureCompanies, seedExampleData, seedExampleRfqs } from "@/lib/seed";
 
 export class DatabaseConfigError extends Error {
   constructor(message: string) {
@@ -39,6 +39,59 @@ const SCHEMA: string[] = [
     verified INTEGER NOT NULL DEFAULT 0,
     created_at INTEGER NOT NULL
   )`,
+  `CREATE TABLE IF NOT EXISTS rfqs (
+    id TEXT PRIMARY KEY,
+    owner_id TEXT NOT NULL,
+    company_id TEXT,
+    title TEXT NOT NULL,
+    category TEXT NOT NULL,
+    subtype TEXT NOT NULL DEFAULT '',
+    quantity REAL NOT NULL,
+    unit TEXT NOT NULL,
+    specs TEXT NOT NULL DEFAULT '',
+    needed_by TEXT,
+    delivery_zip TEXT NOT NULL,
+    delivery_location TEXT NOT NULL DEFAULT '',
+    budget_cents INTEGER,
+    expires_on TEXT NOT NULL,
+    status TEXT NOT NULL DEFAULT 'open',
+    awarded_quote_id TEXT,
+    is_example INTEGER NOT NULL DEFAULT 0,
+    created_at INTEGER NOT NULL,
+    updated_at INTEGER NOT NULL
+  )`,
+  `CREATE INDEX IF NOT EXISTS rfqs_status_created ON rfqs (status, created_at)`,
+  `CREATE INDEX IF NOT EXISTS rfqs_owner ON rfqs (owner_id, created_at)`,
+  `CREATE TABLE IF NOT EXISTS rfq_quotes (
+    id TEXT PRIMARY KEY,
+    rfq_id TEXT NOT NULL,
+    quoter_id TEXT NOT NULL,
+    company_id TEXT,
+    price_cents INTEGER NOT NULL,
+    price_basis TEXT NOT NULL DEFAULT 'total',
+    quantity REAL NOT NULL,
+    lead_time_days INTEGER NOT NULL,
+    notes TEXT NOT NULL DEFAULT '',
+    valid_until TEXT NOT NULL,
+    status TEXT NOT NULL DEFAULT 'submitted',
+    created_at INTEGER NOT NULL,
+    updated_at INTEGER NOT NULL,
+    UNIQUE (rfq_id, quoter_id)
+  )`,
+  `CREATE INDEX IF NOT EXISTS rfq_quotes_rfq ON rfq_quotes (rfq_id, created_at)`,
+  `CREATE INDEX IF NOT EXISTS rfq_quotes_quoter ON rfq_quotes (quoter_id, created_at)`,
+  `CREATE TABLE IF NOT EXISTS rfq_files (
+    id TEXT PRIMARY KEY,
+    rfq_id TEXT NOT NULL,
+    quote_id TEXT,
+    uploader_id TEXT NOT NULL,
+    name TEXT NOT NULL,
+    pathname TEXT NOT NULL,
+    content_type TEXT NOT NULL,
+    size INTEGER NOT NULL,
+    created_at INTEGER NOT NULL
+  )`,
+  `CREATE INDEX IF NOT EXISTS rfq_files_rfq ON rfq_files (rfq_id, quote_id)`,
   `CREATE TABLE IF NOT EXISTS sessions (
     id TEXT PRIMARY KEY,
     user_id TEXT NOT NULL,
@@ -163,6 +216,10 @@ async function upgradeListingColumns(client: Client): Promise<void> {
     alters.push("ALTER TABLE listings ADD COLUMN subtype TEXT NOT NULL DEFAULT ''");
   }
   const userColumns = await tableColumns(client, "users");
+  const messageColumns = await tableColumns(client, "messages");
+  if (!messageColumns.has("rfq_id")) {
+    alters.push("ALTER TABLE messages ADD COLUMN rfq_id TEXT NOT NULL DEFAULT ''");
+  }
   if (!userColumns.has("company_id")) {
     alters.push("ALTER TABLE users ADD COLUMN company_id TEXT");
   }
@@ -207,6 +264,9 @@ async function upgradeListingColumns(client: Client): Promise<void> {
     "CREATE INDEX IF NOT EXISTS listings_type_status ON listings (listing_type, status)",
   );
   await client.execute("CREATE INDEX IF NOT EXISTS users_company ON users (company_id)");
+  await client.execute(
+    "CREATE INDEX IF NOT EXISTS messages_rfq ON messages (rfq_id, created_at)",
+  );
 
   if (!(await migrationApplied(client, LISTING_FILTERS_MIGRATION))) {
     await normalizeListingTaxonomy(client);
@@ -237,6 +297,7 @@ async function upgradeListingColumns(client: Client): Promise<void> {
   // B2B: every account belongs to a company, and every listing to that company.
   // Idempotent: only touches users/listings without a company yet.
   await ensureCompanies(client);
+  await seedExampleRfqs(client);
 }
 
 const NON_METAL_EXAMPLES_MIGRATION = "seed-non-metal-examples-v1";
@@ -303,6 +364,7 @@ export async function seedIfEmpty(client: Client): Promise<void> {
     await seedExampleData(tx);
     await tx.commit();
     await ensureCompanies(client);
+    await seedExampleRfqs(client);
   } catch (error) {
     await tx.rollback();
     throw error;

@@ -68,7 +68,7 @@ export function ListingForm({
         ) : null}
         <p className="text-sm text-neutral-500">
           {isWanted
-            ? "Tell suppliers what your business needs. They reply in your inbox with what they have."
+            ? "A quick request: suppliers reply in your inbox. Need drawings, a due date, and side-by-side quotes? Post an RFQ at /rfqs/new instead."
             : "Offer surplus, scrap, or remnant material to other businesses."}
         </p>
       </fieldset>

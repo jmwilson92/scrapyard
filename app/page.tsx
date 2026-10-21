@@ -18,7 +18,7 @@ export default function HomePage() {
         <div>
           <h1 className="text-2xl font-bold tracking-tight">Business-to-business material network</h1>
           <p className="mt-1 max-w-xl text-sm leading-6 text-neutral-500">
-            Shops, fabricators, contractors, manufacturers, and suppliers buy, sell, and source metal, lumber, construction materials, plastics, glass, and wire from each other. Post surplus, or post a wanted request when your supplier runs short. Business accounts only. Example cards around San Diego are sample inventory, not live stock.
+            Shops, fabricators, contractors, manufacturers, and suppliers buy, sell, and source metal, lumber, construction materials, plastics, glass, and wire from each other. Post surplus, or post an RFQ with specs and drawings when your supplier runs short. Business accounts only. Example cards around San Diego are sample inventory, not live stock.
           </p>
         </div>
         <Link href="/browse?zip=92101&miles=50" className="inline-flex min-h-11 shrink-0 items-center text-sm font-semibold text-primary md:min-h-0">

@@ -1,6 +1,7 @@
 import "server-only";
 import fs from "node:fs/promises";
 import path from "node:path";
+import { blobAccess, blobConfigured, deletePrivateFile, putPrivateFile } from "@/lib/file-store";
 import { contentTypeFor, detectImage, MAX_PHOTO_BYTES } from "@/lib/images";
 
 export async function saveListingPhoto(
@@ -34,8 +35,13 @@ export async function saveListingPhoto(
             "STORAGE_PROVIDER is blob, but BLOB_READ_WRITE_TOKEN is not set.",
         };
       }
-      const { put } = await import("@vercel/blob");
       const name = `${crypto.randomUUID()}.${kind}`;
+      if (blobAccess() === "private") {
+        // Private store: keep the bytes in Blob and serve them via /uploads/[name].
+        await putPrivateFile(`listings/${name}`, bytes, contentTypeFor(kind));
+        return { ok: true, url: `/uploads/${name}` };
+      }
+      const { put } = await import("@vercel/blob");
       const blob = await put(`listings/${name}`, Buffer.from(bytes), {
         access: "public",
         contentType: contentTypeFor(kind),
@@ -62,6 +68,10 @@ export async function deleteStoredPhoto(url: string | null): Promise<void> {
   if (url.startsWith("/uploads/")) {
     const name = url.slice("/uploads/".length);
     if (!/^[\w.-]+$/.test(name)) return;
+    if (blobConfigured()) {
+      await deletePrivateFile(`listings/${name}`);
+      return;
+    }
     await fs.unlink(path.join(uploadDirectory(), name)).catch(() => undefined);
     return;
   }

@@ -69,6 +69,8 @@ export type PublicUser = {
 export type MessageRow = {
   id: string;
   listingId: string;
+  /** Set when the thread is about an RFQ instead of a listing. */
+  rfqId?: string;
   listingTitle: string;
   senderId: string;
   senderShop: string;
@@ -81,6 +83,7 @@ export type MessageRow = {
 
 export type InboxThread = {
   listingId: string;
+  rfqId?: string;
   listingTitle: string;
   otherUserId: string;
   otherShopName: string;
