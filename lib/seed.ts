@@ -1,6 +1,12 @@
 import type { InStatement, ResultSet } from "@libsql/client";
 import { hashPassword } from "@/lib/passwords";
-import { SEED_LISTINGS, SEED_SHOPS, DEMO_PASSWORD } from "@/lib/seed-data";
+import {
+  NON_METAL_SEED_LISTINGS,
+  SEED_LISTINGS,
+  SEED_SHOPS,
+  DEMO_PASSWORD,
+  type SeedListing,
+} from "@/lib/seed-data";
 
 type Executor = {
   execute(stmt: InStatement): Promise<ResultSet>;
@@ -27,21 +33,43 @@ export async function seedExampleData(db: Executor): Promise<void> {
     });
   }
 
-  for (let index = 0; index < SEED_LISTINGS.length; index += 1) {
-    const listing = SEED_LISTINGS[index];
-    const createdAt = now - (SEED_LISTINGS.length - index) * 60_000;
+  await insertSeedListings(db, SEED_LISTINGS, now);
+}
+
+/**
+ * Adds the non-metal sample lots to a database that was seeded before they
+ * existed. Only runs when the example shops are present; skips ids already there.
+ */
+export async function backfillNonMetalExamples(db: Executor): Promise<void> {
+  const shops = await db.execute(
+    "SELECT COUNT(*) AS c FROM users WHERE is_example = 1",
+  );
+  if (Number(shops.rows[0]?.c ?? 0) === 0) return;
+  await insertSeedListings(db, NON_METAL_SEED_LISTINGS, Date.now());
+}
+
+async function insertSeedListings(
+  db: Executor,
+  listings: readonly SeedListing[],
+  now: number,
+): Promise<void> {
+  for (let index = 0; index < listings.length; index += 1) {
+    const listing = listings[index];
+    const createdAt = now - (listings.length - index) * 60_000;
     await db.execute({
-      sql: `INSERT INTO listings (
-        id, seller_id, title, material, metal_type, alloy, form,
+      sql: `INSERT OR IGNORE INTO listings (
+        id, seller_id, title, category, subtype, material, metal_type, alloy, form,
         length_in, width_in, thickness_in, diameter_in,
         quantity, weight_lbs, price_cents, zip, notes, photo_url,
         status, is_example, delivery_mode, delivery_radius_miles, delivery_fee_cents,
         certs_available, certs_note, created_at, updated_at
-      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'active', 1, ?, ?, ?, ?, ?, ?, ?)`,
+      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'active', 1, ?, ?, ?, ?, ?, ?, ?)`,
       args: [
         listing.id,
         listing.sellerId,
         listing.title,
+        listing.category,
+        listing.subtype,
         listing.material,
         listing.metalType,
         listing.alloy,
