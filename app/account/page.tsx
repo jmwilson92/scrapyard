@@ -8,6 +8,8 @@ import { VerifiedSellerBadge, VerifiedSellerPlaceholder } from "@/components/ver
 import { Button } from "@/components/ui/button";
 import { formatListingPrice } from "@/lib/format";
 import { getCompanyById, listListingsBySeller } from "@/lib/repo";
+import { RfqStatusBadge } from "@/components/rfq-card";
+import { listQuotesByQuoter, listRfqsByOwner } from "@/lib/rfq-repo";
 import { loadRequestDb } from "@/lib/server-db";
 import { getCurrentUser } from "@/lib/session";
 import { redirect } from "next/navigation";
@@ -36,9 +38,11 @@ async function AccountBody({ searchParams }: { searchParams: SearchParams }) {
   const user = await getCurrentUser();
   if (!user) redirect("/login?next=/account");
 
-  const [listings, company] = await Promise.all([
+  const [listings, company, myRfqs, myQuotes] = await Promise.all([
     listListingsBySeller(loaded.db, user.id),
     user.companyId ? getCompanyById(loaded.db, user.companyId) : Promise.resolve(null),
+    listRfqsByOwner(loaded.db, user.id),
+    listQuotesByQuoter(loaded.db, user.id),
   ]);
   const companyDefaults: Record<string, string> = {
     companyName: company?.name ?? user.shopName,
@@ -94,6 +98,46 @@ async function AccountBody({ searchParams }: { searchParams: SearchParams }) {
         <div className="mt-4">
           <CompanyForm defaults={companyDefaults} />
         </div>
+      </section>
+
+      <section className="grid gap-3">
+        <div className="flex items-center justify-between gap-3">
+          <h2 className="text-xl font-bold">Your RFQs</h2>
+          <Button nativeButton={false} render={<Link href="/rfqs/new" />} className="h-11 px-4">
+            Post an RFQ
+          </Button>
+        </div>
+        {myRfqs.length === 0 ? (
+          <p className="rounded-xl bg-card p-5 text-sm ring-1 ring-foreground/10">
+            No RFQs yet. Post one when you need material quoted.
+          </p>
+        ) : (
+          <ul className="grid gap-2">
+            {myRfqs.map((rfq) => (
+              <li key={rfq.id} className="flex flex-wrap items-center justify-between gap-2 rounded-xl bg-card p-4 ring-1 ring-foreground/10">
+                <Link href={`/rfqs/${rfq.id}`} className="font-semibold hover:text-copper">{rfq.title}</Link>
+                <span className="flex items-center gap-2 text-sm text-muted-foreground">
+                  {rfq.quoteCount} {rfq.quoteCount === 1 ? "quote" : "quotes"} <RfqStatusBadge rfq={rfq} />
+                </span>
+              </li>
+            ))}
+          </ul>
+        )}
+        {myQuotes.length > 0 ? (
+          <>
+            <h2 className="mt-3 text-xl font-bold">Quotes you sent</h2>
+            <ul className="grid gap-2">
+              {myQuotes.map((quote) => (
+                <li key={quote.id} className="flex flex-wrap items-center justify-between gap-2 rounded-xl bg-card p-4 ring-1 ring-foreground/10">
+                  <Link href={`/rfqs/${quote.rfqId}`} className="font-semibold hover:text-copper">{quote.rfqTitle}</Link>
+                  <span className="text-sm font-semibold">
+                    {quote.status === "submitted" ? "Pending" : quote.status === "accepted" ? "Accepted" : "Declined"}
+                  </span>
+                </li>
+              ))}
+            </ul>
+          </>
+        ) : null}
       </section>
 
       <section>

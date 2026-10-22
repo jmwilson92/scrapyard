@@ -25,6 +25,7 @@ export function SiteHeader() {
         </div>
         <MobileMenu>
           <HeaderLink href="/browse">Browse</HeaderLink>
+          <HeaderLink href="/rfqs">RFQs</HeaderLink>
           <HeaderLink href="/map">Map</HeaderLink>
           <Suspense fallback={<span className="inline-flex min-h-11 items-center px-2 text-neutral-400 md:min-h-0 md:px-1">Account</span>}>
             <AccountLinks />
@@ -89,7 +90,7 @@ function AccountNav({
         >
           Post material
         </Link>
-        <HeaderLink href="/login?next=/listings/new%3Ftype%3Dwanted">Post a wanted</HeaderLink>
+        <HeaderLink href="/login?next=/rfqs/new">Post an RFQ</HeaderLink>
         <HeaderLink href="/register">Join as a business</HeaderLink>
         <HeaderLink href="/login">Sign in</HeaderLink>
       </>
@@ -104,7 +105,7 @@ function AccountNav({
       >
         Post material
       </Link>
-      <HeaderLink href="/listings/new?type=wanted">Post a wanted</HeaderLink>
+      <HeaderLink href="/rfqs/new">Post an RFQ</HeaderLink>
       <HeaderLink href="/inbox">
         Inbox
         {unread > 0 ? (

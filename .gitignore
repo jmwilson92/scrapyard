@@ -40,6 +40,7 @@ yarn-error.log*
 /data/*.db
 /data/*.db-*
 /data/uploads/*
+/data/files/
 !/data/uploads/.gitkeep
 
 # vercel
