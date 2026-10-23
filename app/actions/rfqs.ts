@@ -22,8 +22,14 @@ import {
   insertRfq,
   insertRfqFile,
   insertRfqMessage,
+  listActiveQuoterIds,
+  listRfqFiles,
+  reviseRfq,
   setRfqStatus,
+  withdrawQuote,
+  type RfqFileOp,
 } from "@/lib/rfq-repo";
+import { diffRfq, revLabel, summarizeChanges } from "@/lib/rfq-history";
 import { getRequestDb } from "@/lib/server-db";
 import { getCurrentUser } from "@/lib/session";
 import { parseMessageBody } from "@/lib/validation";
@@ -57,6 +63,13 @@ async function readUploads(
   const files = formData
     .getAll("attachments")
     .filter((entry): entry is File => entry instanceof File && entry.size > 0);
+  return checkFiles(files, max);
+}
+
+async function checkFiles(
+  files: File[],
+  max: number,
+): Promise<{ ok: true; uploads: Upload[] } | { ok: false; error: string }> {
   if (files.length === 0) return { ok: true, uploads: [] };
   const unavailable = filesUnavailableReason();
   if (unavailable) return { ok: false, error: unavailable };
@@ -248,4 +261,109 @@ export async function sendRfqMessageAction(_prev: FormState, formData: FormData)
 function stringField(formData: FormData, key: string): string {
   const value = formData.get(key);
   return typeof value === "string" ? value : "";
+}
+
+/** Owner edit: every change becomes a new revision with a change log. */
+export async function updateRfqAction(_prev: FormState, formData: FormData): Promise<FormState> {
+  const values = readValues(formData, RFQ_FIELDS);
+  const rfqId = stringField(formData, "rfqId");
+  const user = await getCurrentUser();
+  if (!user) return { errors: {}, values, formError: "Sign in with your business account." };
+  if (!isSafeId(rfqId)) return { errors: {}, values, formError: "That RFQ isn't available." };
+  const db = await getRequestDb();
+  const rfq = await getRfqById(db, rfqId);
+  if (!rfq || rfq.ownerId !== user.id) return { errors: {}, values, formError: "Only the RFQ owner can edit it." };
+  if (rfq.status !== "open") return { errors: {}, values, formError: "Awarded or closed RFQs can't be edited." };
+
+  const parsed = parseRfqForm(values, (zip) => lookupZip(zip) != null);
+  if (!parsed.ok) return { errors: parsed.errors, values };
+  const changes = diffRfq(rfq, parsed.value);
+
+  const current = (await listRfqFiles(db, rfqId)).filter((f) => !f.quoteId && !f.removedAt);
+  const removeIds = new Set(formData.getAll("removeFile").map(String));
+  const replacements: { fileId: string; name: string; file: File }[] = [];
+  for (const file of current) {
+    const entry = formData.get(`replace-${file.id}`);
+    if (entry instanceof File && entry.size > 0 && !removeIds.has(file.id)) {
+      replacements.push({ fileId: file.id, name: file.name, file: entry });
+    }
+  }
+  const added = formData
+    .getAll("attachments")
+    .filter((entry): entry is File => entry instanceof File && entry.size > 0);
+  const removed = current.filter((f) => removeIds.has(f.id));
+  const remaining = current.length - removed.length;
+  if (remaining + added.length > MAX_RFQ_ATTACHMENTS) {
+    return { errors: { attachments: `Keep it to ${MAX_RFQ_ATTACHMENTS} current files. Remove one first.` }, values };
+  }
+  const newFiles = [...replacements.map((r) => r.file), ...added];
+  if (newFiles.length > 0 && formData.get("acknowledge") !== "on") {
+    return { errors: { acknowledge: "Confirm the attachment warning before uploading." }, values };
+  }
+  const checked = await checkFiles(newFiles, MAX_RFQ_ATTACHMENTS);
+  if (!checked.ok) return { errors: { attachments: checked.error }, values };
+
+  const stored: string[] = [];
+  const ops: RfqFileOp[] = removed.map((f) => ({ kind: "remove" as const, fileId: f.id, name: f.name }));
+  try {
+    for (const [index, upload] of checked.uploads.entries()) {
+      const id = crypto.randomUUID();
+      const pathname = `rfq/${rfqId}/${id}-${upload.checked.name}`;
+      await putPrivateFile(pathname, upload.bytes, upload.checked.contentType);
+      stored.push(pathname);
+      const replacing = index < replacements.length ? replacements[index] : null;
+      ops.push({
+        kind: "add",
+        file: {
+          id,
+          rfqId,
+          quoteId: null,
+          uploaderId: user.id,
+          name: upload.checked.name,
+          pathname,
+          contentType: upload.checked.contentType,
+          size: upload.checked.size,
+        },
+        replacesFileId: replacing?.fileId,
+        replacedName: replacing?.name,
+      });
+    }
+  } catch {
+    await Promise.all(stored.map((pathname) => deletePrivateFile(pathname)));
+    return { errors: {}, values, formError: "The attachments couldn't be stored. Try again." };
+  }
+
+  const revision = await reviseRfq(db, { rfqId, ownerId: user.id, next: parsed.value, changes, fileOps: ops });
+  if (revision == null) return { errors: {}, values, formError: "Nothing changed." };
+
+  const fileNotes = ops.map((op) =>
+    op.kind === "remove" ? "drawing removed" : op.replacesFileId ? "drawing replaced" : "drawing added",
+  );
+  const summary = [summarizeChanges(changes), ...new Set(fileNotes)].filter(Boolean).join(", ");
+  const quoters = await listActiveQuoterIds(db, rfqId);
+  for (const quoterId of quoters) {
+    await insertRfqMessage(db, {
+      id: crypto.randomUUID(),
+      rfqId,
+      senderId: user.id,
+      recipientId: quoterId,
+      body: `RFQ updated to ${revLabel(revision)} (${summary}). Your quote was based on an earlier revision. Please re-check the RFQ and its History before you ship or re-confirm price and lead time.`,
+    });
+  }
+  revalidatePath(`/rfqs/${rfqId}`);
+  revalidatePath("/rfqs");
+  revalidatePath("/inbox");
+  redirect(`/rfqs/${rfqId}?updated=1`);
+}
+
+export async function withdrawQuoteAction(formData: FormData): Promise<void> {
+  const quoteId = stringField(formData, "quoteId");
+  const back = stringField(formData, "back") === "rfq" ? `/rfqs/${stringField(formData, "rfqId")}` : "/quotes";
+  const user = await getCurrentUser();
+  if (!user) redirect("/login?next=/quotes");
+  if (!isSafeId(quoteId)) notFound();
+  const db = await getRequestDb();
+  await withdrawQuote(db, quoteId, user.id);
+  revalidatePath("/quotes");
+  redirect(back.startsWith("/rfqs/") && !isSafeId(back.slice(6)) ? "/quotes" : back);
 }

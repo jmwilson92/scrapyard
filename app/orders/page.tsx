@@ -5,6 +5,7 @@ import { DatabaseSetup } from "@/components/database-setup";
 import { OrderStatusBadge } from "@/components/payments";
 import { Shell } from "@/components/shell";
 import { formatMoney } from "@/lib/format";
+import { stageIndex, stageLabel, stageProgress, ORDER_STAGES } from "@/lib/order-stages";
 import { listOrdersForUser, type Order } from "@/lib/orders-repo";
 import { loadRequestDb } from "@/lib/server-db";
 import { getCurrentUser } from "@/lib/session";
@@ -58,7 +59,20 @@ function OrderList({ title, empty, orders, other }: { title: string; empty: stri
                     {formatMoney(other === "seller" ? order.amountCents : order.amountCents - order.feeCents)}
                   </span>
                 </span>
-                <OrderStatusBadge status={order.status} />
+                <span className="flex items-center gap-2">
+                  <OrderStatusBadge status={order.status} />
+                </span>
+                {order.status !== "pending" && order.status !== "failed" ? (
+                  <span className="grid w-full gap-1">
+                    <span className="flex justify-between text-xs font-semibold text-neutral-700">
+                      <span>{stageLabel(order.stage)}</span>
+                      <span className="text-neutral-500">Step {stageIndex(order.stage) + 1} of {ORDER_STAGES.length}</span>
+                    </span>
+                    <span className="h-1.5 w-full overflow-hidden rounded-full bg-neutral-200" aria-hidden>
+                      <span className="block h-full rounded-full bg-primary transition-[width] duration-700 motion-reduce:transition-none" style={{ width: `${Math.max(stageProgress(order.stage), 4)}%` }} />
+                    </span>
+                  </span>
+                ) : null}
               </Link>
             </li>
           ))}

@@ -1,3 +1,4 @@
+import { isOrderStage, statusForStage, type OrderStage } from "@/lib/order-stages";
 import type { Client } from "@libsql/client";
 
 export const ORDER_STATUSES = ["pending", "paid", "shipped", "completed", "refunded", "failed"] as const;
@@ -25,6 +26,9 @@ export type Order = {
   stripePaymentIntentId: string | null;
   stripeAccountId: string;
   paidAt: number | null;
+  /** Production stage (tracker). Separate from payment `status`. */
+  stage: OrderStage;
+  stageUpdatedAt: number | null;
   createdAt: number;
   updatedAt: number;
 };
@@ -259,6 +263,8 @@ function mapOrder(row: Record<string, unknown>): Order {
     stripePaymentIntentId: opt(row.stripe_payment_intent_id),
     stripeAccountId: text(row.stripe_account_id),
     paidAt: row.paid_at == null ? null : num(row.paid_at),
+    stage: isOrderStage(text(row.stage)) ? (text(row.stage) as OrderStage) : "placed",
+    stageUpdatedAt: row.stage_updated_at == null ? null : num(row.stage_updated_at),
     createdAt: num(row.created_at),
     updatedAt: num(row.updated_at),
   };
@@ -273,4 +279,61 @@ function opt(v: unknown): string | null {
 function num(v: unknown): number {
   const n = Number(v ?? 0);
   return Number.isFinite(n) ? n : 0;
+}
+
+export type OrderUpdate = {
+  id: string;
+  orderId: string;
+  stage: OrderStage;
+  note: string;
+  fileId: string | null;
+  fileName: string | null;
+  fileType: string | null;
+  authorId: string;
+  createdAt: number;
+};
+
+/** Records a supplier progress update and moves the order's stage. */
+export async function addOrderUpdate(
+  db: Client,
+  update: { id: string; orderId: string; sellerId: string; stage: OrderStage; note: string; fileId: string | null },
+): Promise<boolean> {
+  const order = await getOrderById(db, update.orderId);
+  if (!order || order.sellerId !== update.sellerId) return false;
+  const now = Date.now();
+  await db.batch(
+    [
+      {
+        sql: `INSERT INTO order_updates (id, order_id, stage, note, file_id, author_id, created_at)
+          VALUES (?, ?, ?, ?, ?, ?, ?)`,
+        args: [update.id, update.orderId, update.stage, update.note, update.fileId, update.sellerId, now],
+      },
+      {
+        sql: "UPDATE orders SET stage = ?, stage_updated_at = ?, status = ?, updated_at = ? WHERE id = ?",
+        args: [update.stage, now, statusForStage(update.stage, order.status), now, update.orderId],
+      },
+    ],
+    "write",
+  );
+  return true;
+}
+
+export async function listOrderUpdates(db: Client, orderId: string): Promise<OrderUpdate[]> {
+  const result = await db.execute({
+    sql: `SELECT u.*, f.name AS file_name, f.content_type AS file_type
+      FROM order_updates u LEFT JOIN rfq_files f ON f.id = u.file_id
+      WHERE u.order_id = ? ORDER BY u.created_at DESC`,
+    args: [orderId],
+  });
+  return result.rows.map((row) => ({
+    id: text(row.id),
+    orderId: text(row.order_id),
+    stage: isOrderStage(text(row.stage)) ? (text(row.stage) as OrderStage) : "placed",
+    note: text(row.note),
+    fileId: opt(row.file_id),
+    fileName: opt(row.file_name),
+    fileType: opt(row.file_type),
+    authorId: text(row.author_id),
+    createdAt: num(row.created_at),
+  }));
 }

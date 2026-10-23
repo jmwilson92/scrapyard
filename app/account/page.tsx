@@ -171,13 +171,13 @@ async function AccountBody({ searchParams }: { searchParams: SearchParams }) {
         )}
         {myQuotes.length > 0 ? (
           <>
-            <h2 className="mt-3 text-xl font-bold">Quotes you sent</h2>
+            <h2 className="mt-3 text-xl font-bold">Quotes you sent <Link href="/quotes" className="ml-2 text-sm font-semibold text-primary">See all</Link></h2>
             <ul className="grid gap-2">
               {myQuotes.map((quote) => (
                 <li key={quote.id} className="flex flex-wrap items-center justify-between gap-2 rounded-xl bg-card p-4 ring-1 ring-foreground/10">
                   <Link href={`/rfqs/${quote.rfqId}`} className="font-semibold hover:text-copper">{quote.rfqTitle}</Link>
                   <span className="text-sm font-semibold">
-                    {quote.status === "submitted" ? "Pending" : quote.status === "accepted" ? "Accepted" : "Declined"}
+                    {quote.status === "submitted" ? "Pending" : quote.status === "accepted" ? "Accepted" : quote.status === "withdrawn" ? "Withdrawn" : "Declined"}
                   </span>
                 </li>
               ))}
