@@ -34,6 +34,8 @@ import { getCurrentUser } from "@/lib/session";
 import { fieldLabel, revLabel } from "@/lib/rfq-history";
 import { withdrawQuoteAction } from "@/app/actions/rfqs";
 import { lookupZip } from "@/lib/zip";
+import { NDA_MODE_LABELS } from "@/lib/nda";
+import { listNdaSignatures, listSignaturesBySigner, mustSignNda, type NdaSignature } from "@/lib/nda-repo";
 
 type Params = Promise<{ id: string }>;
 
@@ -61,6 +63,10 @@ async function RfqDetail({ params }: { params: Params }) {
   const files = user ? await listRfqFiles(db, id) : [];
   const visibleFiles = user ? files.filter((file) => canViewFile(file, user.id, rfq.ownerId)) : [];
   const rfqFiles = visibleFiles.filter((file) => !file.quoteId && !file.removedAt);
+  // NDA gate (also enforced in the file route and quote action).
+  const ndaLocked = user ? await mustSignNda(db, rfq, user.id) : rfq.ndaMode !== "none";
+  const signatures = owner && rfq.ndaMode !== "none" ? await listNdaSignatures(db, id) : [];
+  const mySignatures = user && !owner ? await listSignaturesBySigner(db, id, user.id) : [];
   const changes = await listRfqChanges(db, id);
   const quotes = owner ? await listQuotesForRfq(db, id) : [];
   const myQuote = user && !owner ? await findQuoteByQuoter(db, id, user.id) : null;
@@ -132,6 +138,11 @@ async function RfqDetail({ params }: { params: Params }) {
         <p className="mt-1 text-sm leading-6 whitespace-pre-wrap text-neutral-800">{rfq.specs}</p>
       </section>
 
+      {rfq.ndaMode !== "none" ? (
+        <NdaPanel rfqId={rfq.id} mode={rfq.ndaMode} locked={ndaLocked} signedIn={Boolean(user)} owner={owner}
+          resign={ndaLocked && mySignatures.length > 0} mine={mySignatures.find((s) => s.ndaRevision === rfq.ndaRevision) ?? null} />
+      ) : null}
+
       <section className="grid gap-2">
         <h2 className="text-lg font-bold">Attachments</h2>
         <AttachmentWarning audience="rfq" />
@@ -142,6 +153,8 @@ async function RfqDetail({ params }: { params: Params }) {
           </p>
         ) : rfqFiles.length === 0 ? (
           <p className="text-sm text-neutral-600">No files attached.</p>
+        ) : ndaLocked ? (
+          <LockedFileList files={rfqFiles} rfqId={rfq.id} />
         ) : (
           <FileList files={rfqFiles} showRev />
         )}
@@ -160,7 +173,7 @@ async function RfqDetail({ params }: { params: Params }) {
                 <p className="text-xs text-neutral-500">{formatWhen(group.at)}</p>
                 <ul className="mt-1 grid gap-1 text-sm">
                   {group.items.map((change) => {
-                    const oldFile = change.field !== "fileAdded" ? findFileByName(visibleFiles, change.oldValue) : undefined;
+                    const oldFile = change.field !== "fileAdded" && !ndaLocked ? findFileByName(visibleFiles, change.oldValue) : undefined;
                     return (
                       <li key={change.id} className="leading-6 break-words">
                         <span className="font-medium">{fieldLabel(change.field)}:</span>{" "}
@@ -187,6 +200,7 @@ async function RfqDetail({ params }: { params: Params }) {
         </section>
       ) : null}
 
+      {owner && rfq.ndaMode !== "none" ? <SignerList rfqId={rfq.id} signatures={signatures} currentRevision={rfq.ndaRevision} /> : null}
       {owner ? (
         <OwnerQuotes rfqId={rfq.id} unit={rfq.unit} quotes={quotes} files={visibleFiles} canDecide={open} payment={payment} currentRevision={rfq.revision} />
       ) : null}
@@ -237,6 +251,14 @@ async function RfqDetail({ params }: { params: Params }) {
                   <Button type="submit" variant="outline" className="h-11 w-full bg-card px-4 sm:w-auto">Withdraw quote</Button>
                 </form>
               ) : null}
+            </section>
+          ) : open && ndaLocked ? (
+            <section className="grid gap-3 rounded-2xl border border-neutral-200 p-4">
+              <h2 className="text-lg font-bold">Submit a quote</h2>
+              <p className="text-sm text-neutral-600">Sign the NDA to see the drawings and send a quote.</p>
+              <Button nativeButton={false} render={<Link href={`/rfqs/${rfq.id}/nda`} />} className="h-11 w-full px-4 sm:w-fit">
+                Review and sign NDA
+              </Button>
             </section>
           ) : open ? (
             <section className="grid gap-3 rounded-2xl border border-neutral-200 p-4">
@@ -391,6 +413,85 @@ function FileList({ files, showRev = false }: { files: RfqFile[]; showRev?: bool
             {showRev ? <span className="rounded-full bg-neutral-100 px-1.5 text-xs">{revLabel(file.revision)}</span> : null}
             <span className="font-normal text-neutral-500">{formatBytes(file.size)}</span>
           </a>
+        </li>
+      ))}
+    </ul>
+  );
+}
+
+function NdaPanel({ rfqId, mode, locked, signedIn, owner, resign, mine }: {
+  rfqId: string;
+  mode: "template" | "custom" | "none";
+  locked: boolean;
+  signedIn: boolean;
+  owner: boolean;
+  resign: boolean;
+  mine: NdaSignature | null;
+}) {
+  return (
+    <section className={`grid gap-2 rounded-2xl border p-4 text-sm leading-6 ${locked ? "border-amber-300 bg-amber-50" : "border-neutral-200"}`}>
+      <h2 className="text-lg font-bold">NDA required · {NDA_MODE_LABELS[mode]}</h2>
+      {owner ? (
+        <p>Other businesses must sign this NDA before they can open your files or quote. <Link href={`/rfqs/${rfqId}/nda`} className="font-semibold text-primary">View NDA</Link></p>
+      ) : !signedIn ? (
+        <p>Sign in with a business account, then sign the buyer&apos;s NDA to unlock the files.</p>
+      ) : locked ? (
+        <>
+          <p>{resign ? "The buyer changed the NDA since you signed. Re-sign the new version to keep access to the files." : "Sign the buyer's NDA to unlock the drawings and quote."}</p>
+          <Button nativeButton={false} render={<Link href={`/rfqs/${rfqId}/nda`} />} className="h-11 w-full px-4 sm:w-fit">
+            {resign ? "Review and re-sign NDA" : "Review and sign NDA"}
+          </Button>
+        </>
+      ) : mine ? (
+        <p>
+          Signed by {mine.signerName} on {formatWhen(mine.signedAt)}.{" "}
+          <Link href={`/rfqs/${rfqId}/nda/record/${mine.id}`} className="font-semibold text-primary">View signed copy</Link>
+        </p>
+      ) : null}
+    </section>
+  );
+}
+
+function SignerList({ rfqId, signatures, currentRevision }: { rfqId: string; signatures: NdaSignature[]; currentRevision: number }) {
+  return (
+    <section className="grid gap-2">
+      <h2 className="text-lg font-bold">NDA signatures</h2>
+      {signatures.length === 0 ? (
+        <p className="text-sm text-neutral-600">No one has signed yet.</p>
+      ) : (
+        <ul className="grid gap-2">
+          {signatures.map((sig) => (
+            <li key={sig.id} className="flex flex-wrap items-center justify-between gap-2 rounded-xl border border-neutral-200 bg-white p-3 text-sm">
+              <span>
+                <span className="font-semibold">{sig.businessName}</span> · {sig.signerName}, {sig.signerTitle}
+                <span className="block text-neutral-500">
+                  {formatWhen(sig.signedAt)}
+                  {sig.ndaRevision !== currentRevision ? " · signed an earlier NDA, needs to re-sign" : ""}
+                </span>
+              </span>
+              <Link href={`/rfqs/${rfqId}/nda/record/${sig.id}`} className="inline-flex min-h-11 items-center font-semibold text-primary md:min-h-9">
+                Signed record
+              </Link>
+            </li>
+          ))}
+        </ul>
+      )}
+    </section>
+  );
+}
+
+function LockedFileList({ files, rfqId }: { files: RfqFile[]; rfqId: string }) {
+  if (files.length === 0) return <p className="text-sm text-neutral-600">No files attached.</p>;
+  return (
+    <ul className="grid gap-1.5">
+      {files.map((file) => (
+        <li key={file.id}>
+          <Link href={`/rfqs/${rfqId}/nda`}
+            className="inline-flex min-h-11 items-center gap-2 rounded-xl border border-dashed border-neutral-300 bg-neutral-50 px-3 text-sm font-semibold text-neutral-500 md:min-h-9">
+            <span aria-hidden>🔒</span>
+            {file.name}
+            <span className="font-normal">Locked until you sign the NDA</span>
+          </Link>
         </li>
       ))}
     </ul>

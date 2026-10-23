@@ -1,7 +1,7 @@
 "use client";
 
 import { useActionState, useState } from "react";
-import { createRfqAction, sendRfqMessageAction, submitQuoteAction, updateRfqAction } from "@/app/actions/rfqs";
+import { createRfqAction, sendRfqMessageAction, signNdaAction, submitQuoteAction, updateRfqAction } from "@/app/actions/rfqs";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -10,6 +10,7 @@ import { ATTACHMENT_ACCEPT, ATTACHMENT_HELP } from "@/lib/attachments";
 import { CATEGORIES, subtypesFor } from "@/lib/constants";
 import { emptyFormState, type FormState } from "@/lib/form-state";
 import { UNITS } from "@/lib/rfq";
+import { DEFAULT_NDA_MODE, NDA_DISCLAIMER } from "@/lib/nda";
 
 const fieldClass = "h-11 w-full rounded-xl bg-white text-base md:text-base";
 const selectClass =
@@ -26,7 +27,7 @@ export function AttachmentWarning({ audience }: { audience: "rfq" | "quote" }) {
         Don&apos;t upload sensitive, ITAR or export-controlled (EAR), proprietary, or
         confidential files, or anything under an NDA.{" "}
         {audience === "rfq"
-          ? "RFQ attachments are visible to every signed-in business on Skrappily."
+          ? "Without an NDA, RFQ attachments are visible to every signed-in business on Skrappily. With an NDA, businesses must sign it before they can open them."
           : "Quote attachments are visible to the RFQ owner and your company."}{" "}
         Share controlled drawings directly with a vetted supplier instead.
       </p>
@@ -61,7 +62,7 @@ export function RfqForm({
 }: {
   defaultZip: string;
   today: string;
-  edit?: { rfqId: string; values: Record<string, string>; files: EditableFile[] };
+  edit?: { rfqId: string; values: Record<string, string>; files: EditableFile[]; ndaFileName?: string | null };
 }) {
   const [state, action, pending] = useActionState(edit ? updateRfqAction : createRfqAction, {
     ...emptyFormState,
@@ -134,6 +135,7 @@ export function RfqForm({
           <Input id="budget" name="budget" inputMode="decimal" className={fieldClass} defaultValue={v.budget} />
         </Field>
       </div>
+      <NdaPicker initial={v.ndaMode || DEFAULT_NDA_MODE} error={e.ndaFile} currentFileName={edit?.ndaFileName ?? null} editing={Boolean(edit)} />
       <AttachmentWarning audience="rfq" />
       {edit && edit.files.length > 0 ? (
         <fieldset className="grid gap-2">
@@ -167,6 +169,84 @@ export function RfqForm({
       {e.acknowledge ? <p className="text-sm text-destructive">{e.acknowledge}</p> : null}
       <Button type="submit" className="h-11 px-4 text-base" disabled={pending}>
         {edit ? (pending ? "Saving…" : "Save changes") : pending ? "Posting…" : "Post RFQ"}
+      </Button>
+    </form>
+  );
+}
+
+const NDA_OPTIONS = [
+  { value: "template", label: "Skrappily standard NDA", hint: "Mutual NDA filled in with both business names and this RFQ." },
+  { value: "custom", label: "Upload our own NDA", hint: "PDF. Quoters read it and e-sign before seeing files." },
+  { value: "none", label: "None", hint: "Any signed-in business can open the attachments." },
+];
+
+function NdaPicker({ initial, error, currentFileName, editing }: {
+  initial: string;
+  error?: string;
+  currentFileName: string | null;
+  editing: boolean;
+}) {
+  const [mode, setMode] = useState(initial);
+  return (
+    <fieldset className="grid gap-2">
+      <legend className="mb-1 text-sm font-medium">NDA for quoters</legend>
+      <p className="text-sm text-neutral-500">
+        With an NDA, other businesses must sign it before they can open your files or send a quote.
+        {editing ? " Changing or replacing it makes everyone who already signed re-sign." : ""}
+      </p>
+      <div className="grid gap-2 sm:grid-cols-3">
+        {NDA_OPTIONS.map((option) => (
+          <label key={option.value}
+            className={`flex min-h-11 cursor-pointer items-start gap-2 rounded-xl border bg-white p-3 text-sm ${mode === option.value ? "border-primary" : "border-neutral-200"}`}>
+            <input type="radio" name="ndaMode" value={option.value} checked={mode === option.value}
+              onChange={() => setMode(option.value)} className="mt-1 size-4 accent-primary" />
+            <span>
+              <span className="font-semibold">{option.label}</span>
+              <span className="block text-neutral-500">{option.hint}</span>
+            </span>
+          </label>
+        ))}
+      </div>
+      {mode === "custom" ? (
+        <label className="grid gap-1 text-sm">
+          <span className="text-neutral-600">
+            {currentFileName ? `Current NDA: ${currentFileName}. Upload a new PDF to replace it (optional).` : "Your NDA (PDF)"}
+          </span>
+          <input name="ndaFile" type="file" accept=".pdf,application/pdf" required={!currentFileName}
+            className="min-h-11 w-full rounded-xl border border-input bg-white px-3 py-2 text-sm file:mr-3 file:rounded-full file:border-0 file:bg-neutral-100 file:px-3 file:py-1.5 file:text-sm file:font-semibold" />
+        </label>
+      ) : null}
+      {mode === "template" ? <p className="text-xs text-neutral-500">{NDA_DISCLAIMER}</p> : null}
+      {error ? <p className="text-sm text-destructive">{error}</p> : null}
+    </fieldset>
+  );
+}
+
+export function NdaSignForm({ rfqId, ndaRevision, businessName }: { rfqId: string; ndaRevision: number; businessName: string }) {
+  const [state, action, pending] = useActionState(signNdaAction, emptyFormState);
+  const v = state.values;
+  const e = state.errors;
+  return (
+    <form action={action} className="grid gap-4">
+      <FormMessages state={state} />
+      <input type="hidden" name="rfqId" value={rfqId} />
+      <input type="hidden" name="ndaRevision" value={ndaRevision} />
+      <div className="grid gap-4 sm:grid-cols-2">
+        <Field label="Full legal name" name="signerName" error={e.signerName}>
+          <Input id="signerName" name="signerName" autoComplete="name" className={fieldClass} defaultValue={v.signerName} required />
+        </Field>
+        <Field label="Title" name="signerTitle" error={e.signerTitle}>
+          <Input id="signerTitle" name="signerTitle" autoComplete="organization-title" className={fieldClass}
+            defaultValue={v.signerTitle} placeholder="Owner, Purchasing Manager" required />
+        </Field>
+      </div>
+      <label className="flex min-h-11 items-start gap-2 text-sm">
+        <input type="checkbox" name="agree" required className="mt-1 size-4 accent-primary" />
+        <span>I agree to this NDA on behalf of <strong>{businessName}</strong> and I&apos;m authorized to bind it. My typed name is my electronic signature.</span>
+      </label>
+      {e.agree ? <p className="text-sm text-destructive">{e.agree}</p> : null}
+      <Button type="submit" className="h-11 px-4 text-base" disabled={pending}>
+        {pending ? "Signing…" : "Sign NDA and unlock files"}
       </Button>
     </form>
   );

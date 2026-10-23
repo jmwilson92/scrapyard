@@ -206,6 +206,24 @@ const SCHEMA: string[] = [
     created_at INTEGER NOT NULL
   )`,
   `CREATE INDEX IF NOT EXISTS order_updates_order ON order_updates (order_id, created_at)`,
+  `CREATE TABLE IF NOT EXISTS rfq_nda_signatures (
+    id TEXT PRIMARY KEY,
+    rfq_id TEXT NOT NULL,
+    nda_revision INTEGER NOT NULL,
+    nda_hash TEXT NOT NULL,
+    nda_mode TEXT NOT NULL,
+    nda_text TEXT NOT NULL DEFAULT '',
+    nda_file_id TEXT,
+    signer_id TEXT NOT NULL,
+    company_id TEXT,
+    business_name TEXT NOT NULL,
+    signer_name TEXT NOT NULL,
+    signer_title TEXT NOT NULL,
+    ip TEXT NOT NULL DEFAULT '',
+    user_agent TEXT NOT NULL DEFAULT '',
+    signed_at INTEGER NOT NULL
+  )`,
+  `CREATE INDEX IF NOT EXISTS rfq_nda_signatures_rfq ON rfq_nda_signatures (rfq_id, signer_id, nda_revision)`,
 ];
 
 let databasePromise: Promise<Client> | null = null;
@@ -301,6 +319,10 @@ async function upgradeListingColumns(client: Client): Promise<void> {
     alters.push("ALTER TABLE rfqs ADD COLUMN revision INTEGER NOT NULL DEFAULT 1");
   }
   if (!rfqColumns.has("revised_at")) alters.push("ALTER TABLE rfqs ADD COLUMN revised_at INTEGER");
+  // Existing RFQs predate NDAs, so they default to none; new RFQs pick one in the form.
+  if (!rfqColumns.has("nda_mode")) alters.push("ALTER TABLE rfqs ADD COLUMN nda_mode TEXT NOT NULL DEFAULT 'none'");
+  if (!rfqColumns.has("nda_revision")) alters.push("ALTER TABLE rfqs ADD COLUMN nda_revision INTEGER NOT NULL DEFAULT 0");
+  if (!rfqColumns.has("nda_file_id")) alters.push("ALTER TABLE rfqs ADD COLUMN nda_file_id TEXT");
   const quoteColumns = await tableColumns(client, "rfq_quotes");
   if (!quoteColumns.has("rfq_revision")) {
     alters.push("ALTER TABLE rfq_quotes ADD COLUMN rfq_revision INTEGER NOT NULL DEFAULT 1");
@@ -312,6 +334,7 @@ async function upgradeListingColumns(client: Client): Promise<void> {
   if (!fileColumns.has("removed_at")) alters.push("ALTER TABLE rfq_files ADD COLUMN removed_at INTEGER");
   if (!fileColumns.has("replaces_file_id")) alters.push("ALTER TABLE rfq_files ADD COLUMN replaces_file_id TEXT");
   if (!fileColumns.has("order_update_id")) alters.push("ALTER TABLE rfq_files ADD COLUMN order_update_id TEXT");
+  if (!fileColumns.has("kind")) alters.push("ALTER TABLE rfq_files ADD COLUMN kind TEXT NOT NULL DEFAULT 'attachment'");
   const orderColumns = await tableColumns(client, "orders");
   if (!orderColumns.has("stage")) {
     alters.push("ALTER TABLE orders ADD COLUMN stage TEXT NOT NULL DEFAULT 'placed'");
