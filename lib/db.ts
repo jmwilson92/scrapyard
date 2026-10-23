@@ -153,6 +153,38 @@ const SCHEMA: string[] = [
     created_at INTEGER NOT NULL,
     UNIQUE (listing_id, reporter_id)
   )`,
+  `CREATE TABLE IF NOT EXISTS orders (
+    id TEXT PRIMARY KEY,
+    buyer_id TEXT NOT NULL,
+    buyer_company_id TEXT,
+    seller_id TEXT NOT NULL,
+    seller_company_id TEXT,
+    listing_id TEXT,
+    rfq_id TEXT,
+    quote_id TEXT,
+    title TEXT NOT NULL,
+    base_cents INTEGER NOT NULL,
+    card_fee_cents INTEGER NOT NULL DEFAULT 0,
+    amount_cents INTEGER NOT NULL,
+    fee_cents INTEGER NOT NULL,
+    currency TEXT NOT NULL DEFAULT 'usd',
+    status TEXT NOT NULL DEFAULT 'pending',
+    stripe_checkout_session_id TEXT,
+    stripe_payment_intent_id TEXT,
+    stripe_account_id TEXT NOT NULL,
+    paid_at INTEGER,
+    created_at INTEGER NOT NULL,
+    updated_at INTEGER NOT NULL
+  )`,
+  `CREATE INDEX IF NOT EXISTS orders_buyer ON orders (buyer_id, created_at)`,
+  `CREATE INDEX IF NOT EXISTS orders_seller ON orders (seller_id, created_at)`,
+  `CREATE UNIQUE INDEX IF NOT EXISTS orders_session ON orders (stripe_checkout_session_id)`,
+  `CREATE INDEX IF NOT EXISTS orders_payment_intent ON orders (stripe_payment_intent_id)`,
+  `CREATE TABLE IF NOT EXISTS stripe_events (
+    id TEXT PRIMARY KEY,
+    type TEXT NOT NULL,
+    received_at INTEGER NOT NULL
+  )`,
 ];
 
 let databasePromise: Promise<Client> | null = null;
@@ -235,6 +267,13 @@ async function upgradeListingColumns(client: Client): Promise<void> {
     alters.push(
       "ALTER TABLE users ADD COLUMN verified_seller INTEGER NOT NULL DEFAULT 0",
     );
+  }
+  const companyColumns = await tableColumns(client, "companies");
+  if (!companyColumns.has("stripe_account_id")) {
+    alters.push("ALTER TABLE companies ADD COLUMN stripe_account_id TEXT");
+  }
+  if (!companyColumns.has("charges_enabled")) {
+    alters.push("ALTER TABLE companies ADD COLUMN charges_enabled INTEGER NOT NULL DEFAULT 0");
   }
   if (alters.length > 0) {
     await client.batch(

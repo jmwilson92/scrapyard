@@ -113,3 +113,23 @@ Accounts are email plus password. Passwords are hashed with bcrypt. The session 
 ## ZIP data
 
 `data/zip-centroids.csv` comes from the [GeoNames](https://www.geonames.org/) postal code dataset and is used under [CC BY 4.0](https://creativecommons.org/licenses/by/4.0/). See `data/ZIP_SOURCE.txt`.
+
+## Payments (RFQ quotes)
+
+Payments are limited to RFQs for now: once an RFQ owner accepts a quote, they
+see **Pay for this quote** with a breakdown (quote price, card processing fee,
+total). Checkout uses a Stripe Checkout Session as a **destination charge** to
+the supplier's Connect account (Express dashboard; the platform controls fees
+and losses), with `application_fee_amount`. Suppliers turn on payouts from
+**Account → Get paid**. Orders live at `/orders`; suppliers mark them shipped
+or completed. Webhooks land at `/api/stripe/webhook` (raw-body signature check,
+idempotent via `stripe_events`).
+
+**Fee economics.** Stripe charges about 2.9% + 30¢ per card payment, and on a
+destination charge that cost comes out of the platform's balance. A small
+platform fee alone would lose money on every sale, so by default
+(`STRIPE_PASS_THROUGH_CARD_FEES=true`) the buyer's total is grossed up:
+`total = ceil((price + 30¢) / (1 − 2.9%))`. The supplier receives
+`price − 1%`, and the platform keeps the 1% after Stripe's cut. Example:
+a $1,000 quote → buyer pays $1,030.18 ($30.18 card fee), supplier receives
+$990.00, Skrappily nets ≈ $10. Invoices and net terms come later.

@@ -114,6 +114,7 @@ function AccountNav({
           </span>
         ) : null}
       </HeaderLink>
+      <HeaderLink href="/orders">Orders</HeaderLink>
       <HeaderLink href="/account">{user.shopName}</HeaderLink>
       <form action={logoutAction}>
         <button

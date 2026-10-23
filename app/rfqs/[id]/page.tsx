@@ -6,7 +6,11 @@ import { DatabaseSetup } from "@/components/database-setup";
 import { formatQty, RfqStatusBadge } from "@/components/rfq-card";
 import { QuoteForm } from "@/components/rfq-forms";
 import { AttachmentWarning } from "@/components/rfq-forms";
+import { PayQuotePanel } from "@/components/payments";
 import { Shell } from "@/components/shell";
+import type { FeeBreakdown } from "@/lib/fees";
+import { getUserCompanyPayments, type OrderStatus } from "@/lib/orders-repo";
+import { feesFor, paymentsEnabled } from "@/lib/stripe";
 import { Button } from "@/components/ui/button";
 import { formatBytes } from "@/lib/attachments";
 import { businessTypeLabel } from "@/lib/business";
@@ -57,6 +61,24 @@ async function RfqDetail({ params }: { params: Params }) {
   const myQuote = user && !owner ? await findQuoteByQuoter(db, id, user.id) : null;
   const open = acceptsQuotes(rfq);
   const place = lookupZip(rfq.deliveryZip);
+  const accepted = owner ? quotes.find((quote) => quote.status === "accepted") : undefined;
+  let payment: PaymentInfo | null = null;
+  if (accepted && paymentsEnabled()) {
+    const [seller, orderRow] = await Promise.all([
+      getUserCompanyPayments(db, accepted.quoterId),
+      db.execute({
+        sql: "SELECT id, status FROM orders WHERE quote_id = ? ORDER BY created_at DESC LIMIT 1",
+        args: [accepted.id],
+      }),
+    ]);
+    const row = orderRow.rows[0];
+    payment = {
+      quoteId: accepted.id,
+      fees: feesFor(quoteTotalCents(accepted)),
+      sellerReady: Boolean(seller.stripeAccountId && seller.chargesEnabled),
+      existingOrder: row ? { id: String(row.id), status: String(row.status) as OrderStatus } : null,
+    };
+  }
 
   return (
     <article className="mx-auto grid max-w-3xl gap-5">
@@ -111,7 +133,7 @@ async function RfqDetail({ params }: { params: Params }) {
       </section>
 
       {owner ? (
-        <OwnerQuotes rfqId={rfq.id} unit={rfq.unit} quotes={quotes} files={visibleFiles} canDecide={open} />
+        <OwnerQuotes rfqId={rfq.id} unit={rfq.unit} quotes={quotes} files={visibleFiles} canDecide={open} payment={payment} />
       ) : null}
       {owner && rfq.status === "open" ? (
         <form action={closeRfqAction}>
@@ -161,12 +183,20 @@ async function RfqDetail({ params }: { params: Params }) {
   );
 }
 
-function OwnerQuotes({ rfqId, unit, quotes, files, canDecide }: {
+type PaymentInfo = {
+  quoteId: string;
+  fees: FeeBreakdown;
+  sellerReady: boolean;
+  existingOrder: { id: string; status: OrderStatus } | null;
+};
+
+function OwnerQuotes({ rfqId, unit, quotes, files, canDecide, payment }: {
   rfqId: string;
   unit: string;
   quotes: Quote[];
   files: RfqFile[];
   canDecide: boolean;
+  payment: PaymentInfo | null;
 }) {
   return (
     <section className="grid gap-3">
@@ -188,6 +218,15 @@ function OwnerQuotes({ rfqId, unit, quotes, files, canDecide }: {
               </div>
               <QuoteSummary quote={quote} unit={unit} />
               <FileList files={files.filter((file) => file.quoteId === quote.id)} />
+              {payment && payment.quoteId === quote.id ? (
+                <PayQuotePanel
+                  rfqId={rfqId}
+                  quoteId={quote.id}
+                  fees={payment.fees}
+                  sellerReady={payment.sellerReady}
+                  existingOrder={payment.existingOrder}
+                />
+              ) : null}
               <div className="flex flex-wrap gap-2">
                 {canDecide && quote.status === "submitted" ? (
                   <>

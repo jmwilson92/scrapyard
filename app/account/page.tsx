@@ -13,6 +13,9 @@ import { listQuotesByQuoter, listRfqsByOwner } from "@/lib/rfq-repo";
 import { loadRequestDb } from "@/lib/server-db";
 import { getCurrentUser } from "@/lib/session";
 import { redirect } from "next/navigation";
+import { connectStripeAction, refreshStripeStatusAction, stripeDashboardAction } from "@/app/actions/payments";
+import { getUserCompanyPayments } from "@/lib/orders-repo";
+import { paymentsEnabled } from "@/lib/stripe";
 
 export const metadata = { title: "Your company" };
 
@@ -38,12 +41,14 @@ async function AccountBody({ searchParams }: { searchParams: SearchParams }) {
   const user = await getCurrentUser();
   if (!user) redirect("/login?next=/account");
 
-  const [listings, company, myRfqs, myQuotes] = await Promise.all([
+  const [listings, company, myRfqs, myQuotes, payouts] = await Promise.all([
     listListingsBySeller(loaded.db, user.id),
     user.companyId ? getCompanyById(loaded.db, user.companyId) : Promise.resolve(null),
     listRfqsByOwner(loaded.db, user.id),
     listQuotesByQuoter(loaded.db, user.id),
+    getUserCompanyPayments(loaded.db, user.id),
   ]);
+  const paymentsNotice = first(params.payments);
   const companyDefaults: Record<string, string> = {
     companyName: company?.name ?? user.shopName,
     businessType: company?.businessType ?? "",
@@ -99,6 +104,47 @@ async function AccountBody({ searchParams }: { searchParams: SearchParams }) {
           <CompanyForm defaults={companyDefaults} />
         </div>
       </section>
+
+      {paymentsEnabled() && user.profileComplete ? (
+        <section className="rounded-xl bg-card p-4 ring-1 ring-foreground/10 sm:p-6">
+          <div className="flex flex-wrap items-center justify-between gap-2">
+            <h2 className="text-xl font-bold">Get paid</h2>
+            <Link href="/orders" className="text-sm font-semibold text-primary">View orders</Link>
+          </div>
+          <p className="mt-1 max-w-2xl text-sm leading-6 text-neutral-600">
+            Connect a Stripe account so buyers can pay your accepted RFQ quotes by card. Payouts go straight to
+            your bank. Skrappily keeps a small platform fee on each payment.
+          </p>
+          {paymentsNotice === "returned" || paymentsNotice === "refreshed" ? (
+            <p role="status" className="mt-2 text-sm text-primary">
+              {payouts.chargesEnabled ? "Payouts are on." : "Stripe is still reviewing your details. Check back shortly."}
+            </p>
+          ) : null}
+          <div className="mt-3 flex flex-wrap items-center gap-2">
+            {payouts.chargesEnabled ? (
+              <>
+                <span className="rounded-full bg-primary px-2.5 py-1 text-xs font-semibold text-white">Payouts on</span>
+                <form action={stripeDashboardAction}>
+                  <Button type="submit" variant="outline" className="h-11 bg-card px-4">Open Stripe dashboard</Button>
+                </form>
+              </>
+            ) : (
+              <>
+                <form action={connectStripeAction}>
+                  <Button type="submit" className="h-11 px-4">
+                    {payouts.stripeAccountId ? "Finish Stripe setup" : "Set up payouts"}
+                  </Button>
+                </form>
+                {payouts.stripeAccountId ? (
+                  <form action={refreshStripeStatusAction}>
+                    <Button type="submit" variant="outline" className="h-11 bg-card px-4">Refresh status</Button>
+                  </form>
+                ) : null}
+              </>
+            )}
+          </div>
+        </section>
+      ) : null}
 
       <section className="grid gap-3">
         <div className="flex items-center justify-between gap-3">
