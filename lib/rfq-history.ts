@@ -19,6 +19,7 @@ export const FIELD_LABELS: Record<string, string> = {
   fileAdded: "Drawing added",
   fileReplaced: "Drawing replaced",
   fileRemoved: "Drawing removed",
+  nda: "NDA (signers must re-sign)",
 };
 
 export function fieldLabel(field: string): string {

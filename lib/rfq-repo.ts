@@ -2,6 +2,7 @@ import type { Client } from "@libsql/client";
 import { isCategory, type Category } from "@/lib/constants";
 import type { QuoteInput, QuoteStatus, RfqInput, RfqStatus, Unit } from "@/lib/rfq";
 import type { MessageRow } from "@/lib/types";
+import { NDA_MODE_LABELS, parseNdaMode, type NdaMode } from "@/lib/nda";
 
 export type Rfq = RfqInput & {
   id: string;
@@ -17,6 +18,11 @@ export type Rfq = RfqInput & {
   /** 1 = Rev A. Bumped on each owner edit. */
   revision: number;
   revisedAt: number | null;
+  /** NDA quoters must sign before files or quoting unlock. */
+  ndaMode: NdaMode;
+  /** Bumped whenever the NDA is set or replaced; signatures are tied to it. */
+  ndaRevision: number;
+  ndaFileId: string | null;
   createdAt: number;
   updatedAt: number;
 };
@@ -72,6 +78,8 @@ export type RfqFile = {
   removedAt: number | null;
   replacesFileId: string | null;
   orderUpdateId: string | null;
+  /** 'attachment' (drawings, quote files, photos) or 'nda' (buyer's own NDA PDF). */
+  kind: string;
   createdAt: number;
 };
 
@@ -95,14 +103,15 @@ const QUOTE_SELECT = `
 
 export async function insertRfq(
   db: Client,
-  rfq: RfqInput & { id: string; ownerId: string; isExample?: boolean; createdAt?: number },
+  rfq: RfqInput & { id: string; ownerId: string; isExample?: boolean; createdAt?: number; ndaMode?: NdaMode },
 ): Promise<void> {
   const now = rfq.createdAt ?? Date.now();
+  const ndaMode = rfq.ndaMode ?? "none";
   await db.execute({
     sql: `INSERT INTO rfqs (id, owner_id, company_id, title, category, subtype, quantity, unit, specs,
       needed_by, delivery_zip, delivery_location, budget_cents, expires_on, status, is_example,
-      created_at, updated_at)
-      VALUES (?, ?, (SELECT company_id FROM users WHERE id = ?), ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'open', ?, ?, ?)`,
+      created_at, updated_at, nda_mode, nda_revision)
+      VALUES (?, ?, (SELECT company_id FROM users WHERE id = ?), ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'open', ?, ?, ?, ?, ?)`,
     args: [
       rfq.id,
       rfq.ownerId,
@@ -121,6 +130,8 @@ export async function insertRfq(
       rfq.isExample ? 1 : 0,
       now,
       now,
+      ndaMode,
+      ndaMode === "none" ? 0 : 1,
     ],
   });
 }
@@ -290,14 +301,14 @@ export async function decideQuote(
 
 export type NewRfqFile = Omit<
   RfqFile,
-  "createdAt" | "revision" | "removedAt" | "replacesFileId" | "orderUpdateId"
-> & { revision?: number; replacesFileId?: string | null; orderUpdateId?: string | null };
+  "createdAt" | "revision" | "removedAt" | "replacesFileId" | "orderUpdateId" | "kind"
+> & { revision?: number; replacesFileId?: string | null; orderUpdateId?: string | null; kind?: string };
 
 export async function insertRfqFile(db: Client, file: NewRfqFile): Promise<void> {
   await db.execute({
     sql: `INSERT INTO rfq_files (id, rfq_id, quote_id, uploader_id, name, pathname, content_type, size, created_at,
-        revision, replaces_file_id, order_update_id)
-      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+        revision, replaces_file_id, order_update_id, kind)
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
     args: [
       file.id,
       file.rfqId,
@@ -311,13 +322,14 @@ export async function insertRfqFile(db: Client, file: NewRfqFile): Promise<void>
       file.revision ?? 1,
       file.replacesFileId ?? null,
       file.orderUpdateId ?? null,
+      file.kind ?? "attachment",
     ],
   });
 }
 
 export async function listRfqFiles(db: Client, rfqId: string): Promise<RfqFile[]> {
   const result = await db.execute({
-    sql: "SELECT * FROM rfq_files WHERE rfq_id = ? ORDER BY created_at ASC",
+    sql: "SELECT * FROM rfq_files WHERE rfq_id = ? AND COALESCE(kind, 'attachment') != 'nda' ORDER BY created_at ASC",
     args: [rfqId],
   });
   return result.rows.map(mapFile);
@@ -333,6 +345,7 @@ export async function getRfqFile(db: Client, id: string): Promise<RfqFile | null
  * Who may open a file: any business can see RFQ-level files; a quote's file is
  * visible only to the quoter and the RFQ owner.
  */
+/** Quote-file visibility only; NDA gating lives in lib/nda (canAccessFile). */
 export function canViewFile(
   file: Pick<RfqFile, "quoteId" | "uploaderId">,
   viewerId: string,
@@ -451,6 +464,9 @@ function mapRfq(row: Record<string, unknown>): Rfq {
     quoteCount: num(row.quote_count),
     revision: Math.max(1, num(row.revision)),
     revisedAt: row.revised_at == null ? null : num(row.revised_at),
+    ndaMode: parseNdaMode(text(row.nda_mode)) ?? "none",
+    ndaRevision: num(row.nda_revision),
+    ndaFileId: row.nda_file_id ? text(row.nda_file_id) : null,
     createdAt: num(row.created_at),
     updatedAt: num(row.updated_at),
   };
@@ -493,6 +509,7 @@ function mapFile(row: Record<string, unknown>): RfqFile {
     removedAt: row.removed_at == null ? null : num(row.removed_at),
     replacesFileId: row.replaces_file_id ? text(row.replaces_file_id) : null,
     orderUpdateId: row.order_update_id ? text(row.order_update_id) : null,
+    kind: text(row.kind) || "attachment",
     createdAt: num(row.created_at),
   };
 }
@@ -533,11 +550,13 @@ export async function reviseRfq(
     next: RfqInput;
     changes: { field: string; oldValue: string; newValue: string }[];
     fileOps: RfqFileOp[];
+    /** Set when the NDA choice changes or a new custom NDA PDF is uploaded. */
+    nda?: { mode: NdaMode; file?: NewRfqFile };
   },
 ): Promise<number | null> {
-  if (args.changes.length === 0 && args.fileOps.length === 0) return null;
+  if (args.changes.length === 0 && args.fileOps.length === 0 && !args.nda) return null;
   const current = await db.execute({
-    sql: "SELECT COALESCE(revision, 1) AS revision FROM rfqs WHERE id = ? AND owner_id = ?",
+    sql: "SELECT COALESCE(revision, 1) AS revision, nda_mode, nda_file_id FROM rfqs WHERE id = ? AND owner_id = ?",
     args: [args.rfqId, args.ownerId],
   });
   if (!current.rows[0]) return null;
@@ -587,6 +606,33 @@ export async function reviseRfq(
     } else {
       log("fileAdded", "", f.name);
     }
+  }
+  if (args.nda) {
+    const oldMode = parseNdaMode(text(current.rows[0].nda_mode)) ?? "none";
+    const oldFileId = current.rows[0].nda_file_id ? text(current.rows[0].nda_file_id) : null;
+    const nda = args.nda;
+    let fileId = nda.mode === "custom" ? oldFileId : null;
+    if (nda.file) {
+      const f = nda.file;
+      fileId = f.id;
+      statements.push({
+        sql: `INSERT INTO rfq_files (id, rfq_id, quote_id, uploader_id, name, pathname, content_type, size, created_at,
+            revision, replaces_file_id, order_update_id, kind)
+          VALUES (?, ?, NULL, ?, ?, ?, ?, ?, ?, ?, ?, NULL, 'nda')`,
+        args: [f.id, args.rfqId, f.uploaderId, f.name, f.pathname, f.contentType, f.size, now, revision, oldFileId],
+      });
+    }
+    statements.push({
+      sql: `UPDATE rfqs SET nda_mode = ?, nda_file_id = ?,
+          nda_revision = CASE WHEN ? = 'none' THEN nda_revision ELSE nda_revision + 1 END
+        WHERE id = ? AND owner_id = ?`,
+      args: [nda.mode, fileId, nda.mode, args.rfqId, args.ownerId],
+    });
+    const label = (mode: NdaMode, name?: string) => (mode === "custom" && name ? `${NDA_MODE_LABELS[mode]} (${name})` : NDA_MODE_LABELS[mode]);
+    const oldName = oldFileId
+      ? text((await db.execute({ sql: "SELECT name FROM rfq_files WHERE id = ?", args: [oldFileId] })).rows[0]?.name)
+      : undefined;
+    log("nda", label(oldMode, oldName), label(nda.mode, nda.file?.name ?? (nda.mode === "custom" ? oldName : undefined)));
   }
   await db.batch(statements, "write");
   return revision;

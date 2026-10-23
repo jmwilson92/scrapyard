@@ -7,7 +7,7 @@ import { Shell } from "@/components/shell";
 import { isSafeId } from "@/lib/paths";
 import { isoDay } from "@/lib/rfq";
 import { revLabel } from "@/lib/rfq-history";
-import { getRfqById, listRfqFiles } from "@/lib/rfq-repo";
+import { getRfqById, getRfqFile, listRfqFiles } from "@/lib/rfq-repo";
 import { loadRequestDb } from "@/lib/server-db";
 import { getCurrentUser } from "@/lib/session";
 
@@ -49,7 +49,9 @@ async function EditBody({ params }: { params: Params }) {
     deliveryZip: rfq.deliveryZip,
     deliveryLocation: rfq.deliveryLocation,
     budget: rfq.budgetCents != null ? (rfq.budgetCents / 100).toFixed(2) : "",
+    ndaMode: rfq.ndaMode,
   };
+  const ndaFile = rfq.ndaFileId ? await getRfqFile(loaded.db, rfq.ndaFileId) : null;
   return (
     <>
       <p className="text-sm">
@@ -64,7 +66,7 @@ async function EditBody({ params }: { params: Params }) {
         <RfqForm
           defaultZip={user.zip}
           today={isoDay()}
-          edit={{ rfqId: id, values, files: files.map((f) => ({ id: f.id, name: f.name, revLabel: revLabel(f.revision) })) }}
+          edit={{ rfqId: id, values, files: files.map((f) => ({ id: f.id, name: f.name, revLabel: revLabel(f.revision) })), ndaFileName: ndaFile?.name ?? null }}
         />
       </div>
     </>

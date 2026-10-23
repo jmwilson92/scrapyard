@@ -1,6 +1,7 @@
 "use server";
 
 import { revalidatePath } from "next/cache";
+import { headers } from "next/headers";
 import { notFound, redirect } from "next/navigation";
 import {
   checkAttachmentSet,
@@ -30,6 +31,8 @@ import {
   type RfqFileOp,
 } from "@/lib/rfq-repo";
 import { diffRfq, revLabel, summarizeChanges } from "@/lib/rfq-history";
+import { DEFAULT_NDA_MODE, NDA_MODE_LABELS, parseNdaMode, parseSignature, type NdaMode } from "@/lib/nda";
+import { listSignerIds, mustSignNda, recordNdaSignature } from "@/lib/nda-repo";
 import { getRequestDb } from "@/lib/server-db";
 import { getCurrentUser } from "@/lib/session";
 import { parseMessageBody } from "@/lib/validation";
@@ -133,13 +136,25 @@ export async function createRfqAction(_prev: FormState, formData: FormData): Pro
   if (!parsed.ok) return { errors: parsed.errors, values };
   const uploads = await readUploads(formData, MAX_RFQ_ATTACHMENTS);
   if (!uploads.ok) return { errors: { attachments: uploads.error }, values };
+  const ndaMode = parseNdaMode(stringField(formData, "ndaMode")) ?? DEFAULT_NDA_MODE;
+  values.ndaMode = ndaMode;
+  const ndaUpload = await readNdaUpload(formData);
+  if (!ndaUpload.ok) return { errors: { ndaFile: ndaUpload.error }, values };
+  if (ndaMode === "custom" && !ndaUpload.upload) {
+    return { errors: { ndaFile: "Upload your NDA as a PDF, or pick the Skrappily standard NDA." }, values };
+  }
 
   const id = crypto.randomUUID();
   try {
     const db = await getRequestDb();
-    await insertRfq(db, { ...parsed.value, id, ownerId: user.id });
+    await insertRfq(db, { ...parsed.value, id, ownerId: user.id, ndaMode });
     try {
       await storeUploads(db, uploads.uploads, { rfqId: id, quoteId: null, uploaderId: user.id });
+      if (ndaMode === "custom" && ndaUpload.upload) {
+        const ndaFile = await storeNdaUpload(ndaUpload.upload, id, user.id);
+        await insertRfqFile(db, { ...ndaFile, kind: "nda" });
+        await db.execute({ sql: "UPDATE rfqs SET nda_file_id = ? WHERE id = ?", args: [ndaFile.id, id] });
+      }
     } catch {
       await db.batch(
         [
@@ -177,6 +192,9 @@ export async function submitQuoteAction(_prev: FormState, formData: FormData): P
   if (!rfq) return { errors: {}, values, formError: "That RFQ isn't available." };
   if (rfq.ownerId === user.id) return { errors: {}, values, formError: "You can't quote your own RFQ." };
   if (!acceptsQuotes(rfq)) return { errors: {}, values, formError: "This RFQ is no longer taking quotes." };
+  if (await mustSignNda(db, rfq, user.id)) {
+    return { errors: {}, values, formError: "Sign this RFQ's NDA before you quote." };
+  }
   if (await findQuoteByQuoter(db, rfqId, user.id)) {
     return { errors: {}, values, formError: "Your company already quoted this RFQ." };
   }
@@ -279,6 +297,16 @@ export async function updateRfqAction(_prev: FormState, formData: FormData): Pro
   if (!parsed.ok) return { errors: parsed.errors, values };
   const changes = diffRfq(rfq, parsed.value);
 
+  const ndaMode = parseNdaMode(stringField(formData, "ndaMode")) ?? rfq.ndaMode;
+  values.ndaMode = ndaMode;
+  const ndaUpload = await readNdaUpload(formData);
+  if (!ndaUpload.ok) return { errors: { ndaFile: ndaUpload.error }, values };
+  const newNdaPdf = ndaMode === "custom" ? ndaUpload.upload : null;
+  if (ndaMode === "custom" && !newNdaPdf && !rfq.ndaFileId) {
+    return { errors: { ndaFile: "Upload your NDA as a PDF, or pick the Skrappily standard NDA." }, values };
+  }
+  const ndaChanged = ndaMode !== rfq.ndaMode || Boolean(newNdaPdf);
+
   const current = (await listRfqFiles(db, rfqId)).filter((f) => !f.quoteId && !f.removedAt);
   const removeIds = new Set(formData.getAll("removeFile").map(String));
   const replacements: { fileId: string; name: string; file: File }[] = [];
@@ -333,13 +361,22 @@ export async function updateRfqAction(_prev: FormState, formData: FormData): Pro
     return { errors: {}, values, formError: "The attachments couldn't be stored. Try again." };
   }
 
-  const revision = await reviseRfq(db, { rfqId, ownerId: user.id, next: parsed.value, changes, fileOps: ops });
+  let nda: { mode: NdaMode; file?: Awaited<ReturnType<typeof storeNdaUpload>> } | undefined;
+  if (ndaChanged) {
+    try {
+      nda = { mode: ndaMode, file: newNdaPdf ? await storeNdaUpload(newNdaPdf, rfqId, user.id) : undefined };
+    } catch {
+      await Promise.all(stored.map((pathname) => deletePrivateFile(pathname)));
+      return { errors: {}, values, formError: "The NDA couldn't be stored. Try again." };
+    }
+  }
+  const revision = await reviseRfq(db, { rfqId, ownerId: user.id, next: parsed.value, changes, fileOps: ops, nda });
   if (revision == null) return { errors: {}, values, formError: "Nothing changed." };
 
   const fileNotes = ops.map((op) =>
     op.kind === "remove" ? "drawing removed" : op.replacesFileId ? "drawing replaced" : "drawing added",
   );
-  const summary = [summarizeChanges(changes), ...new Set(fileNotes)].filter(Boolean).join(", ");
+  const summary = [summarizeChanges(changes), ...new Set(fileNotes), nda ? "NDA changed" : ""].filter(Boolean).join(", ");
   const quoters = await listActiveQuoterIds(db, rfqId);
   for (const quoterId of quoters) {
     await insertRfqMessage(db, {
@@ -349,6 +386,20 @@ export async function updateRfqAction(_prev: FormState, formData: FormData): Pro
       recipientId: quoterId,
       body: `RFQ updated to ${revLabel(revision)} (${summary}). Your quote was based on an earlier revision. Please re-check the RFQ and its History before you ship or re-confirm price and lead time.`,
     });
+  }
+  if (nda && nda.mode !== "none") {
+    // Signers of an earlier NDA revision must re-sign before files unlock again.
+    const quoterSet = new Set(quoters);
+    for (const signerId of await listSignerIds(db, rfqId)) {
+      if (quoterSet.has(signerId)) continue;
+      await insertRfqMessage(db, {
+        id: crypto.randomUUID(),
+        rfqId,
+        senderId: user.id,
+        recipientId: signerId,
+        body: `The NDA on this RFQ changed (${NDA_MODE_LABELS[nda.mode]}, ${revLabel(revision)}). Please review and re-sign it to keep access to the drawings.`,
+      });
+    }
   }
   revalidatePath(`/rfqs/${rfqId}`);
   revalidatePath("/rfqs");
@@ -366,4 +417,75 @@ export async function withdrawQuoteAction(formData: FormData): Promise<void> {
   await withdrawQuote(db, quoteId, user.id);
   revalidatePath("/quotes");
   redirect(back.startsWith("/rfqs/") && !isSafeId(back.slice(6)) ? "/quotes" : back);
+}
+
+async function readNdaUpload(
+  formData: FormData,
+): Promise<{ ok: true; upload: Upload | null } | { ok: false; error: string }> {
+  const entry = formData.get("ndaFile");
+  if (!(entry instanceof File) || entry.size === 0) return { ok: true, upload: null };
+  const checked = await checkFiles([entry], 1);
+  if (!checked.ok) return checked;
+  const upload = checked.uploads[0];
+  if (upload.checked.contentType !== "application/pdf") return { ok: false, error: "The NDA has to be a PDF." };
+  return { ok: true, upload };
+}
+
+async function storeNdaUpload(upload: Upload, rfqId: string, uploaderId: string) {
+  const id = crypto.randomUUID();
+  const pathname = `rfq/${rfqId}/nda/${id}-${upload.checked.name}`;
+  await putPrivateFile(pathname, upload.bytes, upload.checked.contentType);
+  return {
+    id,
+    rfqId,
+    quoteId: null,
+    uploaderId,
+    name: upload.checked.name,
+    pathname,
+    contentType: upload.checked.contentType,
+    size: upload.checked.size,
+  };
+}
+
+/** Quoter e-signs the RFQ's current NDA revision. */
+export async function signNdaAction(_prev: FormState, formData: FormData): Promise<FormState> {
+  const rfqId = stringField(formData, "rfqId");
+  const values = { signerName: stringField(formData, "signerName"), signerTitle: stringField(formData, "signerTitle") };
+  const user = await getCurrentUser();
+  if (!user) return { errors: {}, values, formError: "Sign in with your business account to sign." };
+  if (!user.profileComplete) return { errors: {}, values, formError: PROFILE_REQUIRED };
+  if (!isSafeId(rfqId)) return { errors: {}, values, formError: "That RFQ isn't available." };
+  const parsed = parseSignature({ ...values, agree: stringField(formData, "agree") || null });
+  if (!parsed.ok) return { errors: parsed.errors, values };
+  const db = await getRequestDb();
+  const rfq = await getRfqById(db, rfqId);
+  if (!rfq || rfq.ndaMode === "none") return { errors: {}, values, formError: "This RFQ doesn't have an NDA." };
+  if (rfq.ownerId === user.id) return { errors: {}, values, formError: "You posted this RFQ, so there's nothing to sign." };
+  // The form carries the revision it showed; refuse if the NDA changed underneath.
+  if (Number(stringField(formData, "ndaRevision")) !== rfq.ndaRevision) {
+    return { errors: {}, values, formError: "The buyer just updated the NDA. Review the new version and sign again." };
+  }
+  if (!(await mustSignNda(db, rfq, user.id))) redirect(`/rfqs/${rfqId}`);
+  const h = await headers();
+  const ip = (h.get("x-forwarded-for") ?? "").split(",")[0].trim() || h.get("x-real-ip") || "";
+  const sig = await recordNdaSignature(db, {
+    rfq,
+    signerId: user.id,
+    signerName: parsed.value.signerName,
+    signerTitle: parsed.value.signerTitle,
+    ip,
+    userAgent: h.get("user-agent") ?? "",
+  });
+  if (sig) {
+    await insertRfqMessage(db, {
+      id: crypto.randomUUID(),
+      rfqId,
+      senderId: user.id,
+      recipientId: rfq.ownerId,
+      body: `${sig.signerName} (${sig.signerTitle}) signed the NDA for this RFQ on behalf of ${sig.businessName}. Signed record: /rfqs/${rfqId}/nda/record/${sig.id}`,
+    });
+  }
+  revalidatePath(`/rfqs/${rfqId}`);
+  revalidatePath("/inbox");
+  redirect(`/rfqs/${rfqId}?signed=1`);
 }
