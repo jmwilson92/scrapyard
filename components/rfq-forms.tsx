@@ -1,7 +1,7 @@
 "use client";
 
 import { useActionState, useState } from "react";
-import { createRfqAction, sendRfqMessageAction, submitQuoteAction } from "@/app/actions/rfqs";
+import { createRfqAction, sendRfqMessageAction, submitQuoteAction, updateRfqAction } from "@/app/actions/rfqs";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -52,10 +52,20 @@ function Attachments({ max, error }: { max: number; error?: string }) {
   );
 }
 
-export function RfqForm({ defaultZip, today }: { defaultZip: string; today: string }) {
-  const [state, action, pending] = useActionState(createRfqAction, {
+export type EditableFile = { id: string; name: string; revLabel: string };
+
+export function RfqForm({
+  defaultZip,
+  today,
+  edit,
+}: {
+  defaultZip: string;
+  today: string;
+  edit?: { rfqId: string; values: Record<string, string>; files: EditableFile[] };
+}) {
+  const [state, action, pending] = useActionState(edit ? updateRfqAction : createRfqAction, {
     ...emptyFormState,
-    values: { deliveryZip: defaultZip, category: "metal", unit: "pcs" },
+    values: edit?.values ?? { deliveryZip: defaultZip, category: "metal", unit: "pcs" },
   });
   const v = state.values;
   const e = state.errors;
@@ -66,6 +76,7 @@ export function RfqForm({ defaultZip, today }: { defaultZip: string; today: stri
   return (
     <form key={formKey(state)} action={action} className="grid gap-4">
       <FormMessages state={state} />
+      {edit ? <input type="hidden" name="rfqId" value={edit.rfqId} /> : null}
       <Field label="RFQ title" name="title" error={e.title}>
         <Input id="title" name="title" className={fieldClass} defaultValue={v.title}
           placeholder="1/2 in 6061-T6 plate, 24 x 48, qty 10" required />
@@ -124,9 +135,30 @@ export function RfqForm({ defaultZip, today }: { defaultZip: string; today: stri
         </Field>
       </div>
       <AttachmentWarning audience="rfq" />
+      {edit && edit.files.length > 0 ? (
+        <fieldset className="grid gap-2">
+          <legend className="mb-1 text-sm font-medium">Current drawings and files</legend>
+          {edit.files.map((file) => (
+            <div key={file.id} className="grid gap-2 rounded-xl border border-neutral-200 bg-white p-3 text-sm">
+              <p className="font-semibold break-all">
+                {file.name} <span className="font-normal text-neutral-500">· {file.revLabel}</span>
+              </p>
+              <label className="grid gap-1">
+                <span className="text-neutral-600">Upload a new revision (old one stays in History)</span>
+                <input name={`replace-${file.id}`} type="file" accept={ATTACHMENT_ACCEPT}
+                  className="min-h-11 w-full rounded-xl border border-input bg-white px-3 py-2 text-sm file:mr-3 file:rounded-full file:border-0 file:bg-neutral-100 file:px-3 file:py-1.5 file:text-sm file:font-semibold" />
+              </label>
+              <label className="flex min-h-11 items-center gap-2">
+                <input type="checkbox" name="removeFile" value={file.id} className="size-4 accent-primary" />
+                Remove this file
+              </label>
+            </div>
+          ))}
+        </fieldset>
+      ) : null}
       <Attachments max={5} error={e.attachments} />
       <label className="flex min-h-11 items-start gap-2 text-sm">
-        <input type="checkbox" name="acknowledge" required className="mt-1 size-4 accent-primary" />
+        <input type="checkbox" name="acknowledge" required={!edit} className="mt-1 size-4 accent-primary" />
         <span>
           These files contain no export-controlled, proprietary, or confidential information, and I&apos;m OK with
           signed-in businesses seeing them.
@@ -134,7 +166,7 @@ export function RfqForm({ defaultZip, today }: { defaultZip: string; today: stri
       </label>
       {e.acknowledge ? <p className="text-sm text-destructive">{e.acknowledge}</p> : null}
       <Button type="submit" className="h-11 px-4 text-base" disabled={pending}>
-        {pending ? "Posting…" : "Post RFQ"}
+        {edit ? (pending ? "Saving…" : "Save changes") : pending ? "Posting…" : "Post RFQ"}
       </Button>
     </form>
   );

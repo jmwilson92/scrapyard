@@ -14,6 +14,9 @@ export type Rfq = RfqInput & {
   awardedQuoteId: string | null;
   isExample: boolean;
   quoteCount: number;
+  /** 1 = Rev A. Bumped on each owner edit. */
+  revision: number;
+  revisedAt: number | null;
   createdAt: number;
   updatedAt: number;
 };
@@ -26,8 +29,34 @@ export type Quote = QuoteInput & {
   companyName: string;
   businessType: string;
   status: QuoteStatus;
+  /** RFQ revision the quote was submitted against. */
+  rfqRevision: number;
   createdAt: number;
   updatedAt: number;
+};
+
+export type SupplierQuote = Quote & {
+  rfqTitle: string;
+  rfqStatus: string;
+  rfqExpiresOn: string;
+  rfqUnit: string;
+  currentRevision: number;
+  buyerName: string;
+  orderId: string | null;
+  orderStatus: string | null;
+  orderStage: string | null;
+};
+
+export type RfqChange = {
+  id: string;
+  rfqId: string;
+  revision: number;
+  changedBy: string;
+  changedByName: string;
+  field: string;
+  oldValue: string;
+  newValue: string;
+  createdAt: number;
 };
 
 export type RfqFile = {
@@ -39,6 +68,10 @@ export type RfqFile = {
   pathname: string;
   contentType: string;
   size: number;
+  revision: number;
+  removedAt: number | null;
+  replacesFileId: string | null;
+  orderUpdateId: string | null;
   createdAt: number;
 };
 
@@ -131,8 +164,9 @@ export async function insertQuote(
   const now = quote.createdAt ?? Date.now();
   await db.execute({
     sql: `INSERT INTO rfq_quotes (id, rfq_id, quoter_id, company_id, price_cents, price_basis, quantity,
-      lead_time_days, notes, valid_until, status, created_at, updated_at)
-      VALUES (?, ?, ?, (SELECT company_id FROM users WHERE id = ?), ?, ?, ?, ?, ?, ?, 'submitted', ?, ?)`,
+      lead_time_days, notes, valid_until, status, rfq_revision, created_at, updated_at)
+      VALUES (?, ?, ?, (SELECT company_id FROM users WHERE id = ?), ?, ?, ?, ?, ?, ?, 'submitted',
+        COALESCE((SELECT revision FROM rfqs WHERE id = ?), 1), ?, ?)`,
     args: [
       quote.id,
       quote.rfqId,
@@ -144,6 +178,7 @@ export async function insertQuote(
       quote.leadTimeDays,
       quote.notes,
       quote.validUntil,
+      quote.rfqId,
       now,
       now,
     ],
@@ -174,11 +209,18 @@ export async function listQuotesForRfq(db: Client, rfqId: string): Promise<Quote
 export async function listQuotesByQuoter(
   db: Client,
   quoterId: string,
-): Promise<(Quote & { rfqTitle: string; rfqStatus: string; rfqExpiresOn: string })[]> {
+): Promise<SupplierQuote[]> {
   const result = await db.execute({
     sql: `SELECT q.*, '' AS company_name, '' AS business_type, r.title AS rfq_title,
-        r.status AS rfq_status, r.expires_on AS rfq_expires_on
+        r.status AS rfq_status, r.expires_on AS rfq_expires_on, r.unit AS rfq_unit,
+        COALESCE(r.revision, 1) AS current_revision,
+        COALESCE(rc.name, ru.shop_name) AS buyer_name,
+        (SELECT o.id FROM orders o WHERE o.quote_id = q.id ORDER BY o.created_at DESC LIMIT 1) AS order_id,
+        (SELECT o.status FROM orders o WHERE o.quote_id = q.id ORDER BY o.created_at DESC LIMIT 1) AS order_status,
+        (SELECT o.stage FROM orders o WHERE o.quote_id = q.id ORDER BY o.created_at DESC LIMIT 1) AS order_stage
       FROM rfq_quotes q JOIN rfqs r ON r.id = q.rfq_id
+      JOIN users ru ON ru.id = r.owner_id
+      LEFT JOIN companies rc ON rc.id = ru.company_id
       WHERE q.quoter_id = ? ORDER BY q.created_at DESC`,
     args: [quoterId],
   });
@@ -187,6 +229,12 @@ export async function listQuotesByQuoter(
     rfqTitle: text(row.rfq_title),
     rfqStatus: text(row.rfq_status),
     rfqExpiresOn: text(row.rfq_expires_on),
+    rfqUnit: text(row.rfq_unit),
+    currentRevision: Math.max(1, num(row.current_revision)),
+    buyerName: text(row.buyer_name),
+    orderId: row.order_id ? text(row.order_id) : null,
+    orderStatus: row.order_status ? text(row.order_status) : null,
+    orderStage: row.order_stage ? text(row.order_stage) : null,
   }));
 }
 
@@ -240,10 +288,16 @@ export async function decideQuote(
   return true;
 }
 
-export async function insertRfqFile(db: Client, file: Omit<RfqFile, "createdAt">): Promise<void> {
+export type NewRfqFile = Omit<
+  RfqFile,
+  "createdAt" | "revision" | "removedAt" | "replacesFileId" | "orderUpdateId"
+> & { revision?: number; replacesFileId?: string | null; orderUpdateId?: string | null };
+
+export async function insertRfqFile(db: Client, file: NewRfqFile): Promise<void> {
   await db.execute({
-    sql: `INSERT INTO rfq_files (id, rfq_id, quote_id, uploader_id, name, pathname, content_type, size, created_at)
-      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+    sql: `INSERT INTO rfq_files (id, rfq_id, quote_id, uploader_id, name, pathname, content_type, size, created_at,
+        revision, replaces_file_id, order_update_id)
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
     args: [
       file.id,
       file.rfqId,
@@ -254,6 +308,9 @@ export async function insertRfqFile(db: Client, file: Omit<RfqFile, "createdAt">
       file.contentType,
       file.size,
       Date.now(),
+      file.revision ?? 1,
+      file.replacesFileId ?? null,
+      file.orderUpdateId ?? null,
     ],
   });
 }
@@ -392,6 +449,8 @@ function mapRfq(row: Record<string, unknown>): Rfq {
     awardedQuoteId: row.awarded_quote_id ? text(row.awarded_quote_id) : null,
     isExample: Number(row.is_example ?? 0) === 1,
     quoteCount: num(row.quote_count),
+    revision: Math.max(1, num(row.revision)),
+    revisedAt: row.revised_at == null ? null : num(row.revised_at),
     createdAt: num(row.created_at),
     updatedAt: num(row.updated_at),
   };
@@ -412,7 +471,9 @@ function mapQuote(row: Record<string, unknown>): Quote {
     leadTimeDays: num(row.lead_time_days),
     notes: text(row.notes),
     validUntil: text(row.valid_until),
-    status: statusRaw === "accepted" || statusRaw === "declined" ? statusRaw : "submitted",
+    status:
+      statusRaw === "accepted" || statusRaw === "declined" || statusRaw === "withdrawn" ? statusRaw : "submitted",
+    rfqRevision: Math.max(1, num(row.rfq_revision)),
     createdAt: num(row.created_at),
     updatedAt: num(row.updated_at),
   };
@@ -428,6 +489,10 @@ function mapFile(row: Record<string, unknown>): RfqFile {
     pathname: text(row.pathname),
     contentType: text(row.content_type),
     size: num(row.size),
+    revision: Math.max(1, num(row.revision)),
+    removedAt: row.removed_at == null ? null : num(row.removed_at),
+    replacesFileId: row.replaces_file_id ? text(row.replaces_file_id) : null,
+    orderUpdateId: row.order_update_id ? text(row.order_update_id) : null,
     createdAt: num(row.created_at),
   };
 }
@@ -439,4 +504,119 @@ function text(value: unknown): string {
 function num(value: unknown): number {
   const n = Number(value ?? 0);
   return Number.isFinite(n) ? n : 0;
+}
+
+/** Supplier pulls back a pending quote. */
+export async function withdrawQuote(db: Client, quoteId: string, quoterId: string): Promise<boolean> {
+  const result = await db.execute({
+    sql: "UPDATE rfq_quotes SET status = 'withdrawn', updated_at = ? WHERE id = ? AND quoter_id = ? AND status = 'submitted'",
+    args: [Date.now(), quoteId, quoterId],
+  });
+  return result.rowsAffected > 0;
+}
+
+export type RfqFileOp =
+  | { kind: "remove"; fileId: string; name: string }
+  | { kind: "add"; file: Omit<NewRfqFile, "revision" | "replacesFileId">; replacesFileId?: string; replacedName?: string };
+
+/**
+ * Applies an owner edit as a new revision: updates fields, records one change
+ * row per field/file, soft-removes replaced or removed drawings (they stay
+ * downloadable from History), and returns the new revision number.
+ * Returns null when nothing changed.
+ */
+export async function reviseRfq(
+  db: Client,
+  args: {
+    rfqId: string;
+    ownerId: string;
+    next: RfqInput;
+    changes: { field: string; oldValue: string; newValue: string }[];
+    fileOps: RfqFileOp[];
+  },
+): Promise<number | null> {
+  if (args.changes.length === 0 && args.fileOps.length === 0) return null;
+  const current = await db.execute({
+    sql: "SELECT COALESCE(revision, 1) AS revision FROM rfqs WHERE id = ? AND owner_id = ?",
+    args: [args.rfqId, args.ownerId],
+  });
+  if (!current.rows[0]) return null;
+  const revision = num(current.rows[0].revision) + 1;
+  const now = Date.now();
+  const n = args.next;
+  const statements: { sql: string; args: (string | number | null)[] }[] = [
+    {
+      sql: `UPDATE rfqs SET title = ?, category = ?, subtype = ?, quantity = ?, unit = ?, specs = ?, needed_by = ?,
+          delivery_zip = ?, delivery_location = ?, budget_cents = ?, expires_on = ?, revision = ?, revised_at = ?,
+          updated_at = ?
+        WHERE id = ? AND owner_id = ?`,
+      args: [n.title, n.category, n.subtype, n.quantity, n.unit, n.specs, n.neededBy, n.deliveryZip,
+        n.deliveryLocation, n.budgetCents, n.expiresOn, revision, now, now, args.rfqId, args.ownerId],
+    },
+  ];
+  const log = (field: string, oldValue: string, newValue: string) =>
+    statements.push({
+      sql: `INSERT INTO rfq_changes (id, rfq_id, revision, changed_by, field, old_value, new_value, created_at)
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
+      args: [crypto.randomUUID(), args.rfqId, revision, args.ownerId, field, oldValue, newValue, now],
+    });
+  for (const change of args.changes) log(change.field, change.oldValue, change.newValue);
+  for (const op of args.fileOps) {
+    if (op.kind === "remove") {
+      statements.push({
+        sql: "UPDATE rfq_files SET removed_at = ? WHERE id = ? AND rfq_id = ? AND quote_id IS NULL AND removed_at IS NULL",
+        args: [now, op.fileId, args.rfqId],
+      });
+      log("fileRemoved", op.name, "");
+      continue;
+    }
+    const f = op.file;
+    statements.push({
+      sql: `INSERT INTO rfq_files (id, rfq_id, quote_id, uploader_id, name, pathname, content_type, size, created_at,
+          revision, replaces_file_id, order_update_id)
+        VALUES (?, ?, NULL, ?, ?, ?, ?, ?, ?, ?, ?, NULL)`,
+      args: [f.id, args.rfqId, f.uploaderId, f.name, f.pathname, f.contentType, f.size, now, revision,
+        op.replacesFileId ?? null],
+    });
+    if (op.replacesFileId) {
+      statements.push({
+        sql: "UPDATE rfq_files SET removed_at = ? WHERE id = ? AND rfq_id = ? AND removed_at IS NULL",
+        args: [now, op.replacesFileId, args.rfqId],
+      });
+      log("fileReplaced", op.replacedName ?? "", f.name);
+    } else {
+      log("fileAdded", "", f.name);
+    }
+  }
+  await db.batch(statements, "write");
+  return revision;
+}
+
+export async function listRfqChanges(db: Client, rfqId: string): Promise<RfqChange[]> {
+  const result = await db.execute({
+    sql: `SELECT ch.*, COALESCE(c.name, u.shop_name, '') AS changed_by_name
+      FROM rfq_changes ch LEFT JOIN users u ON u.id = ch.changed_by LEFT JOIN companies c ON c.id = u.company_id
+      WHERE ch.rfq_id = ? ORDER BY ch.created_at DESC, ch.revision DESC`,
+    args: [rfqId],
+  });
+  return result.rows.map((row) => ({
+    id: text(row.id),
+    rfqId: text(row.rfq_id),
+    revision: num(row.revision),
+    changedBy: text(row.changed_by),
+    changedByName: text(row.changed_by_name),
+    field: text(row.field),
+    oldValue: text(row.old_value),
+    newValue: text(row.new_value),
+    createdAt: num(row.created_at),
+  }));
+}
+
+/** Businesses with a live quote on the RFQ (notified when it changes). */
+export async function listActiveQuoterIds(db: Client, rfqId: string): Promise<string[]> {
+  const result = await db.execute({
+    sql: "SELECT quoter_id FROM rfq_quotes WHERE rfq_id = ? AND status IN ('submitted', 'accepted')",
+    args: [rfqId],
+  });
+  return result.rows.map((row) => text(row.quoter_id));
 }

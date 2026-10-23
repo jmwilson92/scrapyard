@@ -1,13 +1,16 @@
 import Link from "next/link";
 import { notFound, redirect } from "next/navigation";
 import { Suspense } from "react";
-import { advanceOrderAction } from "@/app/actions/payments";
 import { DatabaseSetup } from "@/components/database-setup";
+import { LiveRefresh } from "@/components/live-refresh";
+import { OrderTracker } from "@/components/order-tracker";
+import { OrderUpdateForm } from "@/components/order-update-form";
+import { stageLabel } from "@/lib/order-stages";
 import { OrderStatusBadge, PriceBreakdown } from "@/components/payments";
 import { Shell } from "@/components/shell";
 import { Button } from "@/components/ui/button";
 import { formatMoney } from "@/lib/format";
-import { getOrderById } from "@/lib/orders-repo";
+import { getOrderById, listOrderUpdates } from "@/lib/orders-repo";
 import { isSafeId } from "@/lib/paths";
 import { loadRequestDb } from "@/lib/server-db";
 import { getCurrentUser } from "@/lib/session";
@@ -36,6 +39,8 @@ async function OrderBody({ params, searchParams }: { params: Params; searchParam
   const order = await getOrderById(loaded.db, id);
   if (!order || (order.buyerId !== user.id && order.sellerId !== user.id)) notFound();
   const seller = order.sellerId === user.id;
+  const updates = await listOrderUpdates(loaded.db, order.id);
+  const paid = ["paid", "shipped", "completed"].includes(order.status);
   const justPaid = query.checkout === "success";
 
   return (
@@ -43,8 +48,12 @@ async function OrderBody({ params, searchParams }: { params: Params; searchParam
       <p className="text-sm">
         <Link href="/orders" className="font-semibold text-primary">Orders</Link>
       </p>
+      <LiveRefresh seconds={30} />
       <header className="grid gap-2">
-        <OrderStatusBadge status={order.status} />
+        <p className="flex flex-wrap items-center gap-2 text-sm text-neutral-600">
+          Payment: <OrderStatusBadge status={order.status} />
+          <span>· Stage: <strong className="text-neutral-900">{stageLabel(order.stage)}</strong></span>
+        </p>
         <h1 className="text-2xl font-bold tracking-tight sm:text-3xl">{order.title}</h1>
         <p className="text-sm text-neutral-600">
           {seller ? `Buyer: ${order.buyerName}` : `Supplier: ${order.sellerName}`}
@@ -73,22 +82,58 @@ async function OrderBody({ params, searchParams }: { params: Params; searchParam
           <PriceBreakdown fees={{ baseCents: order.baseCents, cardFeeCents: order.cardFeeCents, totalCents: order.amountCents }} />
         )}
       </section>
-      {seller && (order.status === "paid" || order.status === "shipped") ? (
-        <div className="flex flex-wrap gap-2">
-          {order.status === "paid" ? (
-            <form action={advanceOrderAction}>
-              <input type="hidden" name="orderId" value={order.id} />
-              <input type="hidden" name="next" value="shipped" />
-              <Button type="submit" className="h-11 px-4">Mark shipped</Button>
-            </form>
-          ) : null}
-          <form action={advanceOrderAction}>
-            <input type="hidden" name="orderId" value={order.id} />
-            <input type="hidden" name="next" value="completed" />
-            <Button type="submit" variant="outline" className="h-11 bg-card px-4">Mark completed</Button>
-          </form>
-        </div>
+      <section className="grid gap-3">
+        <h2 className="text-lg font-bold">Progress</h2>
+        <OrderTracker stage={order.stage} frozen={!paid} />
+        {!paid ? (
+          <p className="text-sm text-neutral-600">
+            {order.status === "refunded" ? "This order was refunded, so progress is paused." : "Progress starts once payment clears."}
+          </p>
+        ) : null}
+      </section>
+      {seller && paid && order.stage !== "delivered" ? (
+        <section className="grid gap-3 rounded-2xl border border-neutral-200 p-4">
+          <h2 className="text-lg font-bold">Post a progress update</h2>
+          <p className="text-sm text-neutral-600">The buyer sees it here right away and gets an inbox message.</p>
+          <OrderUpdateForm orderId={order.id} stage={order.stage} />
+        </section>
       ) : null}
+      <section className="grid gap-3">
+        <h2 className="text-lg font-bold">Timeline</h2>
+        <ol className="grid gap-0 border-l-2 border-neutral-200 pl-4">
+          {updates.map((update) => (
+            <li key={update.id} className="relative pb-4">
+              <span className="absolute top-1.5 -left-[23px] size-3 rounded-full bg-primary" aria-hidden />
+              <p className="text-sm font-semibold">{stageLabel(update.stage)}</p>
+              <p className="text-xs text-neutral-500"><time dateTime={new Date(update.createdAt).toISOString()}>{formatWhen(update.createdAt)}</time></p>
+              {update.note ? <p className="mt-1 text-sm leading-6 whitespace-pre-wrap">{update.note}</p> : null}
+              {update.fileId ? (
+                update.fileType?.startsWith("image/") ? (
+                  <a href={`/rfqs/files/${update.fileId}`} className="mt-2 inline-flex min-h-11 items-center rounded-xl border border-neutral-200 bg-white px-3 text-sm font-semibold hover:border-primary">
+                    Photo: {update.fileName}
+                  </a>
+                ) : (
+                  <a href={`/rfqs/files/${update.fileId}`} className="mt-2 inline-flex min-h-11 items-center rounded-xl border border-neutral-200 bg-white px-3 text-sm font-semibold hover:border-primary">
+                    {update.fileName}
+                  </a>
+                )
+              ) : null}
+            </li>
+          ))}
+          {order.paidAt ? (
+            <li className="relative pb-4">
+              <span className="absolute top-1.5 -left-[23px] size-3 rounded-full bg-primary" aria-hidden />
+              <p className="text-sm font-semibold">Order placed / Paid</p>
+              <p className="text-xs text-neutral-500">{formatWhen(order.paidAt)}</p>
+            </li>
+          ) : null}
+          <li className="relative">
+            <span className="absolute top-1.5 -left-[23px] size-3 rounded-full bg-neutral-300" aria-hidden />
+            <p className="text-sm font-semibold">Checkout started</p>
+            <p className="text-xs text-neutral-500">{formatWhen(order.createdAt)}</p>
+          </li>
+        </ol>
+      </section>
       {order.rfqId ? (
         <Button
           nativeButton={false}
@@ -101,4 +146,15 @@ async function OrderBody({ params, searchParams }: { params: Params; searchParam
       ) : null}
     </article>
   );
+}
+
+function formatWhen(ms: number): string {
+  return new Intl.DateTimeFormat("en-US", {
+    month: "short",
+    day: "numeric",
+    hour: "numeric",
+    minute: "2-digit",
+    timeZone: "America/Los_Angeles",
+    timeZoneName: "short",
+  }).format(new Date(ms));
 }

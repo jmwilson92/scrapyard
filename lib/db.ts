@@ -185,6 +185,27 @@ const SCHEMA: string[] = [
     type TEXT NOT NULL,
     received_at INTEGER NOT NULL
   )`,
+  `CREATE TABLE IF NOT EXISTS rfq_changes (
+    id TEXT PRIMARY KEY,
+    rfq_id TEXT NOT NULL,
+    revision INTEGER NOT NULL,
+    changed_by TEXT NOT NULL,
+    field TEXT NOT NULL,
+    old_value TEXT NOT NULL DEFAULT '',
+    new_value TEXT NOT NULL DEFAULT '',
+    created_at INTEGER NOT NULL
+  )`,
+  `CREATE INDEX IF NOT EXISTS rfq_changes_rfq ON rfq_changes (rfq_id, created_at)`,
+  `CREATE TABLE IF NOT EXISTS order_updates (
+    id TEXT PRIMARY KEY,
+    order_id TEXT NOT NULL,
+    stage TEXT NOT NULL,
+    note TEXT NOT NULL DEFAULT '',
+    file_id TEXT,
+    author_id TEXT NOT NULL,
+    created_at INTEGER NOT NULL
+  )`,
+  `CREATE INDEX IF NOT EXISTS order_updates_order ON order_updates (order_id, created_at)`,
 ];
 
 let databasePromise: Promise<Client> | null = null;
@@ -275,6 +296,27 @@ async function upgradeListingColumns(client: Client): Promise<void> {
   if (!companyColumns.has("charges_enabled")) {
     alters.push("ALTER TABLE companies ADD COLUMN charges_enabled INTEGER NOT NULL DEFAULT 0");
   }
+  const rfqColumns = await tableColumns(client, "rfqs");
+  if (!rfqColumns.has("revision")) {
+    alters.push("ALTER TABLE rfqs ADD COLUMN revision INTEGER NOT NULL DEFAULT 1");
+  }
+  if (!rfqColumns.has("revised_at")) alters.push("ALTER TABLE rfqs ADD COLUMN revised_at INTEGER");
+  const quoteColumns = await tableColumns(client, "rfq_quotes");
+  if (!quoteColumns.has("rfq_revision")) {
+    alters.push("ALTER TABLE rfq_quotes ADD COLUMN rfq_revision INTEGER NOT NULL DEFAULT 1");
+  }
+  const fileColumns = await tableColumns(client, "rfq_files");
+  if (!fileColumns.has("revision")) {
+    alters.push("ALTER TABLE rfq_files ADD COLUMN revision INTEGER NOT NULL DEFAULT 1");
+  }
+  if (!fileColumns.has("removed_at")) alters.push("ALTER TABLE rfq_files ADD COLUMN removed_at INTEGER");
+  if (!fileColumns.has("replaces_file_id")) alters.push("ALTER TABLE rfq_files ADD COLUMN replaces_file_id TEXT");
+  if (!fileColumns.has("order_update_id")) alters.push("ALTER TABLE rfq_files ADD COLUMN order_update_id TEXT");
+  const orderColumns = await tableColumns(client, "orders");
+  if (!orderColumns.has("stage")) {
+    alters.push("ALTER TABLE orders ADD COLUMN stage TEXT NOT NULL DEFAULT 'placed'");
+  }
+  if (!orderColumns.has("stage_updated_at")) alters.push("ALTER TABLE orders ADD COLUMN stage_updated_at INTEGER");
   if (alters.length > 0) {
     await client.batch(
       alters.map((sql) => ({ sql })),

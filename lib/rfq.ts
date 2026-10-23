@@ -27,7 +27,7 @@ export function unitLabel(value: string): string {
 export const RFQ_STATUSES = ["open", "awarded", "closed"] as const;
 export type RfqStatus = (typeof RFQ_STATUSES)[number];
 
-export const QUOTE_STATUSES = ["submitted", "accepted", "declined"] as const;
+export const QUOTE_STATUSES = ["submitted", "accepted", "declined", "withdrawn"] as const;
 export type QuoteStatus = (typeof QUOTE_STATUSES)[number];
 
 export type RfqInput = {

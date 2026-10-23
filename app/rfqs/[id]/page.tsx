@@ -23,12 +23,16 @@ import {
   findQuoteByQuoter,
   getRfqById,
   listQuotesForRfq,
+  listRfqChanges,
   listRfqFiles,
   type Quote,
+  type RfqChange,
   type RfqFile,
 } from "@/lib/rfq-repo";
 import { loadRequestDb } from "@/lib/server-db";
 import { getCurrentUser } from "@/lib/session";
+import { fieldLabel, revLabel } from "@/lib/rfq-history";
+import { withdrawQuoteAction } from "@/app/actions/rfqs";
 import { lookupZip } from "@/lib/zip";
 
 type Params = Promise<{ id: string }>;
@@ -56,7 +60,8 @@ async function RfqDetail({ params }: { params: Params }) {
   const owner = user?.id === rfq.ownerId;
   const files = user ? await listRfqFiles(db, id) : [];
   const visibleFiles = user ? files.filter((file) => canViewFile(file, user.id, rfq.ownerId)) : [];
-  const rfqFiles = visibleFiles.filter((file) => !file.quoteId);
+  const rfqFiles = visibleFiles.filter((file) => !file.quoteId && !file.removedAt);
+  const changes = await listRfqChanges(db, id);
   const quotes = owner ? await listQuotesForRfq(db, id) : [];
   const myQuote = user && !owner ? await findQuoteByQuoter(db, id, user.id) : null;
   const open = acceptsQuotes(rfq);
@@ -91,6 +96,11 @@ async function RfqDetail({ params }: { params: Params }) {
           <span className="rounded-full bg-neutral-100 px-2 py-0.5 text-xs font-semibold">
             {categoryLabel(rfq.category)} · {subtypeLabel(rfq.category, rfq.subtype)}
           </span>
+          {rfq.revision > 1 ? (
+            <span className="rounded-full bg-amber-100 px-2 py-0.5 text-xs font-semibold text-amber-900">
+              Updated · {revLabel(rfq.revision)}
+            </span>
+          ) : null}
           {rfq.isExample ? <span className="rounded-full bg-neutral-100 px-2 py-0.5 text-xs font-semibold">Example</span> : null}
         </div>
         <h1 className="text-2xl font-bold tracking-tight sm:text-3xl">{rfq.title}</h1>
@@ -101,6 +111,11 @@ async function RfqDetail({ params }: { params: Params }) {
           </Link>
           {rfq.businessType ? ` · ${businessTypeLabel(rfq.businessType)}` : ""}
         </p>
+        {owner && rfq.status === "open" ? (
+          <Button nativeButton={false} variant="outline" render={<Link href={`/rfqs/${rfq.id}/edit`} />} className="h-11 w-full bg-card px-4 sm:w-fit">
+            Edit RFQ
+          </Button>
+        ) : null}
       </header>
 
       <dl className="grid grid-cols-2 gap-3 text-sm sm:grid-cols-3">
@@ -128,12 +143,52 @@ async function RfqDetail({ params }: { params: Params }) {
         ) : rfqFiles.length === 0 ? (
           <p className="text-sm text-neutral-600">No files attached.</p>
         ) : (
-          <FileList files={rfqFiles} />
+          <FileList files={rfqFiles} showRev />
         )}
       </section>
 
+      {changes.length > 0 ? (
+        <section className="grid gap-2">
+          <h2 className="text-lg font-bold">History</h2>
+          <ol className="grid border-l-2 border-neutral-200 pl-4">
+            {groupByRevision(changes).map((group) => (
+              <li key={group.revision} className="relative pb-4">
+                <span className="absolute top-1.5 -left-[23px] size-3 rounded-full bg-amber-500" aria-hidden />
+                <p className="text-sm font-semibold">
+                  {revLabel(group.revision)} · {group.by}
+                </p>
+                <p className="text-xs text-neutral-500">{formatWhen(group.at)}</p>
+                <ul className="mt-1 grid gap-1 text-sm">
+                  {group.items.map((change) => {
+                    const oldFile = change.field !== "fileAdded" ? findFileByName(visibleFiles, change.oldValue) : undefined;
+                    return (
+                      <li key={change.id} className="leading-6 break-words">
+                        <span className="font-medium">{fieldLabel(change.field)}:</span>{" "}
+                        {change.oldValue ? (
+                          oldFile && user ? (
+                            <a href={`/rfqs/files/${oldFile.id}`} className="text-neutral-500 line-through hover:text-primary">{change.oldValue}</a>
+                          ) : (
+                            <span className="text-neutral-500 line-through">{change.oldValue}</span>
+                          )
+                        ) : null}
+                        {change.oldValue && change.newValue ? " → " : ""}
+                        {change.newValue ? <span>{change.newValue}</span> : null}
+                      </li>
+                    );
+                  })}
+                </ul>
+              </li>
+            ))}
+            <li className="relative">
+              <span className="absolute top-1.5 -left-[23px] size-3 rounded-full bg-neutral-300" aria-hidden />
+              <p className="text-sm font-semibold">Rev A · Posted</p>
+            </li>
+          </ol>
+        </section>
+      ) : null}
+
       {owner ? (
-        <OwnerQuotes rfqId={rfq.id} unit={rfq.unit} quotes={quotes} files={visibleFiles} canDecide={open} payment={payment} />
+        <OwnerQuotes rfqId={rfq.id} unit={rfq.unit} quotes={quotes} files={visibleFiles} canDecide={open} payment={payment} currentRevision={rfq.revision} />
       ) : null}
       {owner && rfq.status === "open" ? (
         <form action={closeRfqAction}>
@@ -166,8 +221,22 @@ async function RfqDetail({ params }: { params: Params }) {
           {myQuote ? (
             <section className="grid gap-2 rounded-2xl border border-neutral-200 p-4">
               <h2 className="text-lg font-bold">Your quote</h2>
+              {myQuote.rfqRevision < rfq.revision ? (
+                <p role="status" className="rounded-xl bg-amber-50 p-3 text-sm text-amber-900">
+                  You quoted on {revLabel(myQuote.rfqRevision)}. The RFQ is now {revLabel(rfq.revision)}; check the History
+                  above and message the buyer if your price or lead time changes.
+                </p>
+              ) : null}
               <QuoteSummary quote={myQuote} unit={rfq.unit} />
-              <FileList files={visibleFiles.filter((file) => file.quoteId === myQuote.id)} />
+              <FileList files={visibleFiles.filter((file) => file.quoteId === myQuote.id && !file.orderUpdateId)} />
+              {myQuote.status === "submitted" ? (
+                <form action={withdrawQuoteAction}>
+                  <input type="hidden" name="quoteId" value={myQuote.id} />
+                  <input type="hidden" name="back" value="rfq" />
+                  <input type="hidden" name="rfqId" value={rfq.id} />
+                  <Button type="submit" variant="outline" className="h-11 w-full bg-card px-4 sm:w-auto">Withdraw quote</Button>
+                </form>
+              ) : null}
             </section>
           ) : open ? (
             <section className="grid gap-3 rounded-2xl border border-neutral-200 p-4">
@@ -190,8 +259,9 @@ type PaymentInfo = {
   existingOrder: { id: string; status: OrderStatus } | null;
 };
 
-function OwnerQuotes({ rfqId, unit, quotes, files, canDecide, payment }: {
+function OwnerQuotes({ rfqId, unit, quotes, files, canDecide, payment, currentRevision }: {
   rfqId: string;
+  currentRevision: number;
   unit: string;
   quotes: Quote[];
   files: RfqFile[];
@@ -216,8 +286,13 @@ function OwnerQuotes({ rfqId, unit, quotes, files, canDecide, payment }: {
                 </Link>
                 <QuoteStatus status={quote.status} />
               </div>
+              {quote.rfqRevision < currentRevision ? (
+                <p className="text-xs font-semibold text-amber-800">
+                  Quoted on {revLabel(quote.rfqRevision)}; RFQ changed since
+                </p>
+              ) : null}
               <QuoteSummary quote={quote} unit={unit} />
-              <FileList files={files.filter((file) => file.quoteId === quote.id)} />
+              <FileList files={files.filter((file) => file.quoteId === quote.id && !file.orderUpdateId)} />
               {payment && payment.quoteId === quote.id ? (
                 <PayQuotePanel
                   rfqId={rfqId}
@@ -297,11 +372,12 @@ function QuoteSummary({ quote, unit }: { quote: Quote; unit: string }) {
 function QuoteStatus({ status }: { status: string }) {
   const style =
     status === "accepted" ? "bg-primary text-white" : status === "declined" ? "bg-neutral-200 text-neutral-700" : "bg-amber-100 text-amber-900";
-  const label = status === "submitted" ? "Pending" : status === "accepted" ? "Accepted" : "Declined";
+  const label =
+    status === "submitted" ? "Pending" : status === "accepted" ? "Accepted" : status === "withdrawn" ? "Withdrawn" : "Declined";
   return <span className={`rounded-full px-2 py-0.5 text-xs font-semibold ${style}`}>{label}</span>;
 }
 
-function FileList({ files }: { files: RfqFile[] }) {
+function FileList({ files, showRev = false }: { files: RfqFile[]; showRev?: boolean }) {
   if (files.length === 0) return null;
   return (
     <ul className="grid gap-1.5">
@@ -312,6 +388,7 @@ function FileList({ files }: { files: RfqFile[] }) {
             className="inline-flex min-h-11 items-center gap-2 rounded-xl border border-neutral-200 bg-white px-3 text-sm font-semibold hover:border-primary md:min-h-9"
           >
             {file.name}
+            {showRev ? <span className="rounded-full bg-neutral-100 px-1.5 text-xs">{revLabel(file.revision)}</span> : null}
             <span className="font-normal text-neutral-500">{formatBytes(file.size)}</span>
           </a>
         </li>
@@ -327,4 +404,31 @@ function Fact({ label, value }: { label: string; value: string }) {
       <dd className="font-medium break-words">{value}</dd>
     </div>
   );
+}
+
+function groupByRevision(changes: RfqChange[]) {
+  const groups: { revision: number; by: string; at: number; items: RfqChange[] }[] = [];
+  for (const change of changes) {
+    const last = groups[groups.length - 1];
+    if (last && last.revision === change.revision) last.items.push(change);
+    else groups.push({ revision: change.revision, by: change.changedByName, at: change.createdAt, items: [change] });
+  }
+  return groups;
+}
+
+function findFileByName(files: RfqFile[], name: string | null): RfqFile | undefined {
+  if (!name) return undefined;
+  return files.find((file) => !file.quoteId && file.removedAt && file.name === name);
+}
+
+function formatWhen(ms: number): string {
+  return new Intl.DateTimeFormat("en-US", {
+    month: "short",
+    day: "numeric",
+    year: "numeric",
+    hour: "numeric",
+    minute: "2-digit",
+    timeZone: "America/Los_Angeles",
+    timeZoneName: "short",
+  }).format(new Date(ms));
 }
